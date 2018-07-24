@@ -40,7 +40,8 @@ headers = \
         mca_base_var_group.h \
         mca_base_vari.h \
 	mca_base_framework.h \
-        mca_base_event.h
+        mca_base_event.h \
+        mca_base_source.h
 
 
 # Library
@@ -64,7 +65,8 @@ libmca_base_la_SOURCES = \
         mca_base_parse_paramfile.c \
 	mca_base_components_register.c \
 	mca_base_framework.c \
-        mca_base_event.c
+        mca_base_event.c \
+        mca_base_source.c
 
 # Conditionally install the header files
 

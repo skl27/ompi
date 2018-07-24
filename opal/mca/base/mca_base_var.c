@@ -290,6 +290,11 @@ int mca_base_var_init(void)
             return ret;
         }
 
+        ret = mca_base_source_init ();
+        if (OPAL_SUCCESS != ret) {
+            return ret;
+        }
+
         ret = mca_base_event_init ();
         if (OPAL_SUCCESS != ret) {
             return ret;

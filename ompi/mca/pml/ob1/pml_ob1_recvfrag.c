@@ -856,7 +856,7 @@ match_one(mca_btl_base_module_t *btl,
 
             mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_POSTED_REMOVE].event,
                                   MCA_BASE_CALLBACK_SAFETY_ASYNC_SIGNAL_SAFE,
-                                  match->req_recv.req_base.req_comm, &match);
+                                  match->req_recv.req_base.req_comm, NULL, &match);
             SPC_TIMER_STOP(OMPI_SPC_MATCH_TIME, &timer);
             return match;
         }
@@ -875,7 +875,7 @@ match_one(mca_btl_base_module_t *btl,
 
         mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_UNEX_INSERT].event,
                               MCA_BASE_CALLBACK_SAFETY_ASYNC_SIGNAL_SAFE,
-                              match->req_recv.req_base.req_comm, hdr);
+                              match->req_recv.req_base.req_comm, NULL, hdr);
 
         SPC_TIMER_STOP(OMPI_SPC_MATCH_TIME, &timer);
         return NULL;

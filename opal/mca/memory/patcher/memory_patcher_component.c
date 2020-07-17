@@ -15,7 +15,7 @@
  *                         reserved.
  * Copyright (c) 2016-2017 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
- * Copyright (c) 2016-2019 IBM Corporation.  All rights reserved.
+ * Copyright (c) 2016-2020 IBM Corporation.  All rights reserved.
  *
  * $COPYRIGHT$
  *
@@ -106,6 +106,22 @@ opal_memory_patcher_component_t mca_memory_patcher_component = {
  * generating an access to r2 before the OPAL_PATCHER_* assembly. This was loading invalid
  * data. If this can be resolved the two levels can be joined.
  */
+
+/*
+ * Nathan's original fix described above can have the same problem reappear if the
+ * interception functions inline themselves.
+ */
+static void *_intercept_mmap(void *start, size_t length, int prot, int flags, int fd, off_t offset) __opal_attribute_noinline__;
+static int _intercept_munmap(void *start, size_t length) __opal_attribute_noinline__;
+#if defined(__linux__)
+static void *_intercept_mremap (void *start, size_t oldlen, size_t newlen, int flags, void *new_address) __opal_attribute_noinline__;
+#else
+static void *_intercept_mremap (void *start, size_t oldlen, void *new_address, size_t newlen, int flags) __opal_attribute_noinline__;
+#endif
+static int _intercept_madvise (void *start, size_t length, int advice) __opal_attribute_noinline__;
+static int _intercept_brk (void *addr) __opal_attribute_noinline__;
+static void *_intercept_shmat(int shmid, const void *shmaddr, int shmflg) __opal_attribute_noinline__;
+static int _intercept_shmdt (const void *shmaddr) __opal_attribute_noinline__;
 
 #if defined (SYS_mmap)
 
@@ -332,6 +348,18 @@ static int intercept_brk (void *addr)
     return result;
 }
 
+#endif
+
+// These op codes used to be in bits/ipc.h but were removed in glibc in 2015
+// with a comment saying they should be defined in internal headers:
+// https://sourceware.org/bugzilla/show_bug.cgi?id=18560
+// and when glibc uses that syscall it seems to do so from its own definitions:
+// https://github.com/bminor/glibc/search?q=IPCOP_shmat&unscoped_q=IPCOP_shmat
+#ifndef IPCOP_shmat
+#define IPCOP_shmat                21
+#endif
+#ifndef IPCOP_shmdt
+#define IPCOP_shmdt                22
 #endif
 
 #if defined(SYS_shmdt) || (defined(IPCOP_shmdt) && defined(SYS_ipc))

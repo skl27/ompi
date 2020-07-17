@@ -69,7 +69,7 @@
 #include "opal/util/argv.h"
 #include "opal/util/show_help.h"
 #include "opal/constants.h"
-#include "opal/threads/tsd.h"
+#include "opal/mca/threads/tsd.h"
 #include "opal/runtime/opal_params.h"
 
 /* this function doesn't depend on sockaddr_h */
@@ -202,7 +202,7 @@ opal_net_init(void)
 uint32_t
 opal_net_prefix2netmask(uint32_t prefixlen)
 {
-    return htonl (((1 << prefixlen) - 1) << (32 - prefixlen));
+    return htonl (((1u << prefixlen) - 1u) << (32 - prefixlen));
 }
 
 

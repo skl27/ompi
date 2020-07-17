@@ -9,6 +9,8 @@
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2015      Los Alamos National Security, LLC. All rights
  *                         reserved.
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -28,6 +30,8 @@ opal_process_name_t opal_name_wildcard = {OPAL_JOBID_WILDCARD, OPAL_VPID_WILDCAR
 opal_process_name_t opal_name_invalid = {OPAL_JOBID_INVALID, OPAL_VPID_INVALID};
 
 opal_process_info_t opal_process_info = {
+    .my_name = {OPAL_JOBID_INVALID, OPAL_VPID_INVALID},
+    .myprocid = {{0}, PMIX_RANK_INVALID},
     .nativelaunch = false,
     .nodename = NULL,
     .top_session_dir = NULL,
@@ -35,17 +39,28 @@ opal_process_info_t opal_process_info = {
     .proc_session_dir = NULL,
     .num_local_peers = 0,  /* there is nobody else but me */
     .my_local_rank = 0,    /* I'm the only process around here */
+    .my_node_rank = 0,
     .cpuset = NULL,
+    .pid = 0,
+    .num_procs = 0,
+    .app_num = 0,
+    .univ_size = 0,
+    .app_sizes = NULL,
+    .app_ldrs = NULL,
+    .command = NULL,
+    .num_apps = 0,
+    .initial_wdir = NULL,
+    .reincarnation = 0,
+    .proc_is_bound = false
 };
 
 static opal_proc_t opal_local_proc = {
     { .opal_list_next = NULL,
       .opal_list_prev = NULL},
-    {OPAL_JOBID_INVALID, OPAL_VPID_INVALID},
-    0,
-    0,
-    NULL,
-    NULL
+    .proc_name = {OPAL_JOBID_INVALID, OPAL_VPID_INVALID},
+    .proc_arch = 0,
+    .proc_flags = 0,
+    .proc_convertor = NULL
 };
 static opal_proc_t* opal_proc_my_name = &opal_local_proc;
 
@@ -55,14 +70,12 @@ static void opal_proc_construct(opal_proc_t* proc)
     proc->proc_convertor = NULL;
     proc->proc_flags = 0;
     proc->proc_name = *OPAL_NAME_INVALID;
-    proc->proc_hostname  = NULL;
 }
 
 static void opal_proc_destruct(opal_proc_t* proc)
 {
     proc->proc_flags     = 0;
     proc->proc_name      = *OPAL_NAME_INVALID;
-    proc->proc_hostname  = NULL;
     proc->proc_convertor = NULL;
 }
 
@@ -188,30 +201,26 @@ struct opal_proc_t *(*opal_proc_for_name) (const opal_process_name_t name) = opa
 char* opal_get_proc_hostname(const opal_proc_t *proc)
 {
     int ret;
+    char *hostname;
 
     /* if the proc is NULL, then we can't know */
     if (NULL == proc) {
-        return "unknown";
+        return strdup("unknown");
     }
 
     /* if it is my own hostname we are after, then just hand back
      * the value in opal_process_info */
     if (proc == opal_proc_my_name) {
-        return opal_process_info.nodename;
-    }
-
-    /* see if we already have the data - if so, pass it back */
-    if (NULL != proc->proc_hostname) {
-        return proc->proc_hostname;
+        return strdup(opal_process_info.nodename);
     }
 
     /* if we don't already have it, then try to get it */
     OPAL_MODEX_RECV_VALUE_OPTIONAL(ret, PMIX_HOSTNAME, &proc->proc_name,
-                                   (char**)&(proc->proc_hostname), PMIX_STRING);
+                                   (char**)&hostname, PMIX_STRING);
     if (OPAL_SUCCESS != ret) {
-        return "unknown";  // return something so the caller doesn't segfault
+        return strdup("unknown");  // return something so the caller doesn't segfault
     }
 
     /* user is not allowed to release the data */
-    return proc->proc_hostname;
+    return hostname;
 }

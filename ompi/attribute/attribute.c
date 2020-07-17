@@ -232,7 +232,7 @@
 #include "ompi_config.h"
 
 #include "opal/class/opal_bitmap.h"
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 #include "opal/sys/atomic.h"
 
 #include "ompi/attribute/attribute.h"
@@ -979,6 +979,7 @@ int ompi_attr_copy_all(ompi_attribute_type_t type, void *old_object,
         /* Did the callback return non-MPI_SUCCESS? */
         if (0 != err) {
             ret = err;
+            OBJ_RELEASE(new_attr);
             goto out;
         }
 

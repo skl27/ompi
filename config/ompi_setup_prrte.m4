@@ -24,7 +24,7 @@
 #
 
 AC_DEFUN([OMPI_SETUP_PRRTE],[
-    OPAL_VAR_SCOPE_PUSH([opal_prrte_save_CPPFLAGS opal_prrte_save_CFLAGS opal_prrte_save_LDFLAGS opal_prrte_save_LIBS opal_prrte_args opal_prrte_save_enable_dlopen opal_prrte_save_enable_mca_dso opal_prrte_save_enable_mca_static])
+    OPAL_VAR_SCOPE_PUSH([opal_prrte_save_CPPFLAGS opal_prrte_save_CFLAGS opal_prrte_save_LDFLAGS opal_prrte_save_LIBS opal_prrte_args opal_prrte_save_enable_dlopen opal_prrte_save_enable_mca_dso opal_prrte_save_enable_mca_static opal_prrte_extra_libs opal_prrte_extra_ltlibs opal_prrte_extra_ldflags opal_prrte_save_with_libevent opal_prrte_save_with_hwloc opal_prrte_save_with_pmix])
 
     opal_prrte_save_CFLAGS=$CFLAGS
     opal_prrte_save_CPPFLAGS=$CPPFLAGS
@@ -33,6 +33,9 @@ AC_DEFUN([OMPI_SETUP_PRRTE],[
     opal_prrte_save_enable_dlopen=enable_dlopen
     opal_prrte_save_enable_mca_dso=enable_mca_dso
     opal_prrte_save_enable_mca_static=enable_mca_static
+    opal_prrte_save_with_libevent=with_libevent
+    opal_prrte_save_with_hwloc=with_hwloc
+    opal_prrte_save_with_pmix=with_pmix
 
     AC_ARG_ENABLE([internal-rte],
                   [AC_HELP_STRING([--enable-internal-rte],
@@ -46,32 +49,50 @@ AC_DEFUN([OMPI_SETUP_PRRTE],[
         [AC_HELP_STRING([--enable-prte-prefix-by-default],
             [Make "mpirun ..." behave exactly the same as "mpirun --prefix \$prefix" (where \$prefix is the value given to --prefix in configure) (default:enabled)])])
 
+    AS_IF([test "$opal_external_pmix_happy" = "yes" && test $opal_numerical_pmix_version -lt 4 && test "$enable_internal_rte" != "no"],
+          [AC_MSG_WARN([OMPI's internal runtime environment "PRRTE" does not support])
+           AC_MSG_WARN([PMIx versions less than v4.x as they lack adequate tool])
+           AC_MSG_WARN([support. You can, if desired, build OMPI against an earlier])
+           AC_MSG_WARN([version of PMIx for strictly direct-launch purposes - e.g., using)])
+           AC_MSG_WARN([Slurm's srun to launch the job - by configuring with the])
+           AC_MSG_WARN([--disable-internal-rte option.])
+           AC_MSG_ERROR([Cannot continue])])
+
     AC_MSG_CHECKING([if RTE support is enabled])
     if test "$enable_internal_rte" != "no"; then
         AC_MSG_RESULT([yes])
         ompi_want_prrte=yes
+        opal_prrte_extra_libs=$OMPI_TOP_BUILDDIR/opal/libopen-pal.la
+        opal_prrte_extra_ltlibs=$OMPI_TOP_BUILDDIR/opal/libopen-pal.la
+
         if test -z $with_libevent || test "$with_libevent" = "internal" || test "$with_libevent" = "yes"; then
             opal_prrte_libevent_arg="--with-libevent-header=$OMPI_TOP_SRCDIR/opal/mca/event/event.h"
-        elif test "$with_libevent" = "external"; then
-            opal_prrte_libevent_arg=""
         else
-            opal_prrte_libevent_arg="--with-libevent=$with_libevent"
+            if test "$with_libevent" = "external"; then
+                opal_prrte_libevent_arg="--with-libevent"
+            else
+                opal_prrte_libevent_arg="--with-libevent=$with_libevent"
+            fi
         fi
 
         if test -z $with_hwloc || test "$with_hwloc" = "internal" || test "$with_hwloc" = "yes"; then
                opal_prrte_hwloc_arg="--with-hwloc-header=$OMPI_TOP_SRCDIR/opal/mca/hwloc/hwloc-internal.h"
-        elif test "$with_hwloc" = "external"; then
-            opal_prrte_hwloc_arg=""
         else
-            opal_prrte_hwloc_arg="--with-hwloc=$with_hwloc"
+            if test "$with_hwloc" = "external"; then
+                opal_prrte_hwloc_arg="--with-hwloc"
+            else
+                opal_prrte_hwloc_arg="--with-hwloc=$with_hwloc"
+            fi
         fi
 
         if test -z $with_pmix || test "$with_pmix" = "internal" || test "$with_pmix" = "yes"; then
             opal_prrte_pmix_arg="--with-pmix-header=$OMPI_TOP_SRCDIR/opal/mca/pmix/pmix-internal.h"
-        elif test "$with_pmix" = "external"; then
-            opal_prrte_pmix_arg=""
         else
-            opal_prrte_pmix_arg="--with-pmix=$with_pmix"
+            if test "$with_pmix" = "external"; then
+                opal_prrte_pmix_arg="--with-pmix"
+            else
+                opal_prrte_pmix_arg="--with-pmix=$with_pmix"
+            fi
         fi
 
         if test -z $enable_prte_prefix_by_default || test "$enable_prte_prefix_by_default" = "yes" ||
@@ -81,7 +102,7 @@ AC_DEFUN([OMPI_SETUP_PRRTE],[
             opal_prrte_prefix_arg=
         fi
 
-        opal_prrte_args="--prefix=$prefix --disable-dlopen $opal_prrte_prefix_arg $opal_prrte_libevent_arg $opal_prrte_hwloc_arg $opal_prrte_pmix_arg"
+        opal_prrte_args="--prefix=$prefix --with-proxy-version-string=$OPAL_VERSION --with-proxy-package-name=\"Open MPI\" --with-proxy-bugreport=\"https://www.open-mpi.org/community/help/\" $opal_prrte_prefix_arg $opal_prrte_libevent_arg $opal_prrte_hwloc_arg $opal_prrte_pmix_arg"
         AS_IF([test "$enable_debug" = "yes"],
               [opal_prrte_args="--enable-debug $opal_prrte_args"
                CFLAGS="$OPAL_CFLAGS_BEFORE_PICKY $OPAL_VISIBILITY_CFLAGS -g"],
@@ -93,7 +114,7 @@ AC_DEFUN([OMPI_SETUP_PRRTE],[
             opal_prrte_args="$opal_prrte_args --with-platform=$with_prrte_platform"
         fi
         # add the extra libs
-        opal_prrte_args="$opal_prrte_args --with-prrte-extra-lib=$OMPI_TOP_BUILDDIR/opal/libopen-pal.la --with-prrte-extra-ltlib=$OMPI_TOP_BUILDDIR/opal/libopen-pal.la"
+        opal_prrte_args="$opal_prrte_args --with-prte-extra-lib=\"$opal_prrte_extra_libs\" --with-prte-extra-ltlib=\"$opal_prrte_extra_ltlibs\""
 
         AC_MSG_CHECKING([final prrte configure args])
         AC_MSG_RESULT([$opal_prrte_args])

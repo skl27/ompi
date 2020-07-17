@@ -1,3 +1,4 @@
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil -*- */
 /*
  * Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
  *                         University Research and Technology
@@ -15,6 +16,7 @@
  * Copyright (c) 2015      Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2018      Amazon.com, Inc. or its affiliates.  All Rights reserved.
+ * Copyright (c) 2020      Google, LLC. All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -388,6 +390,8 @@ mca_btl_tcp_endpoint_send_blocking(mca_btl_base_endpoint_t* btl_endpoint,
 {
     int ret = mca_btl_tcp_send_blocking(btl_endpoint->endpoint_sd, data, size);
     if (ret < 0) {
+        /* send-lock not needed because never called when the socket is in the
+         * event set. */
         btl_endpoint->endpoint_state = MCA_BTL_TCP_FAILED;
         mca_btl_tcp_endpoint_close(btl_endpoint);
     }
@@ -398,19 +402,19 @@ mca_btl_tcp_endpoint_send_blocking(mca_btl_base_endpoint_t* btl_endpoint,
  * Send the globally unique identifier for this process to a endpoint on
  * a newly connected socket.
  */
-static int 
+static int
 mca_btl_tcp_endpoint_send_connect_ack(mca_btl_base_endpoint_t* btl_endpoint)
 {
     opal_process_name_t guid = opal_proc_local_get()->proc_name;
     OPAL_PROCESS_NAME_HTON(guid);
-    
+
     mca_btl_tcp_endpoint_hs_msg_t hs_msg;
     opal_string_copy(hs_msg.magic_id, mca_btl_tcp_magic_id_string,
                      sizeof(hs_msg.magic_id));
     hs_msg.guid = guid;
-    
-    if(sizeof(hs_msg) != 
-       mca_btl_tcp_endpoint_send_blocking(btl_endpoint, 
+
+    if(sizeof(hs_msg) !=
+       mca_btl_tcp_endpoint_send_blocking(btl_endpoint,
                                           &hs_msg, sizeof(hs_msg))) {
          opal_show_help("help-mpi-btl-tcp.txt", "client handshake fail",
                        true, opal_process_info.nodename,
@@ -649,8 +653,8 @@ static int mca_btl_tcp_endpoint_recv_connect_ack(mca_btl_base_endpoint_t* btl_en
      * to be able to exchange the opal_process_name_t over the network.
      */
     if (0 != opal_compare_proc(btl_proc->proc_opal->proc_name, guid)) {
-        BTL_ERROR(("received unexpected process identifier %s",
-                   OPAL_NAME_PRINT(guid)));
+        BTL_ERROR(("received unexpected process identifier: got %s expected %s",
+                   OPAL_NAME_PRINT(guid), OPAL_NAME_PRINT(btl_proc->proc_opal->proc_name)));
         btl_endpoint->endpoint_state = MCA_BTL_TCP_FAILED;
         mca_btl_tcp_endpoint_close(btl_endpoint);
         return OPAL_ERR_UNREACH;
@@ -758,9 +762,9 @@ static int mca_btl_tcp_endpoint_start_connect(mca_btl_base_endpoint_t* btl_endpo
     mca_btl_tcp_proc_tosocks(btl_endpoint->endpoint_addr, &endpoint_addr);
 
     /* Bind the socket to one of the addresses associated with
-     * this btl module.  This sets the source IP to one of the 
-     * addresses shared in modex, so that the destination rank 
-     * can properly pair btl modules, even in cases where Linux 
+     * this btl module.  This sets the source IP to one of the
+     * addresses shared in modex, so that the destination rank
+     * can properly pair btl modules, even in cases where Linux
      * might do something unexpected with routing */
     if (endpoint_addr.ss_family == AF_INET) {
         assert(NULL != &btl_endpoint->endpoint_btl->tcp_ifaddr);
@@ -965,7 +969,7 @@ static void mca_btl_tcp_endpoint_recv_handler(int sd, short flags, void* user)
                    the magic string ID failed). recv_connect_ack already cleaned
                    up the socket. */
                 /* If we get OPAL_ERROR, the other end closed the connection
-                 * because it has initiated a symetrical connexion on its end. 
+                 * because it has initiated a symetrical connexion on its end.
                  * recv_connect_ack already cleaned up the socket. */
             }
             else {
@@ -1014,9 +1018,15 @@ static void mca_btl_tcp_endpoint_recv_handler(int sd, short flags, void* user)
             } else {
                 btl_endpoint->endpoint_recv_frag = NULL;
                 if( MCA_BTL_TCP_HDR_TYPE_SEND == frag->hdr.type ) {
-                    mca_btl_active_message_callback_t* reg;
-                    reg = mca_btl_base_active_message_trigger + frag->hdr.base.tag;
-                    reg->cbfunc(&frag->btl->super, frag->hdr.base.tag, &frag->base, reg->cbdata);
+                    mca_btl_active_message_callback_t *reg =
+                      mca_btl_base_active_message_trigger + frag->hdr.base.tag;
+                    const mca_btl_base_receive_descriptor_t desc =
+                      {.endpoint = btl_endpoint,
+                       .des_segments = frag->base.des_segments,
+                       .des_segment_count = frag->base.des_segment_count,
+                       .tag = frag->hdr.base.tag,
+                       .cbdata = reg->cbdata};
+                    reg->cbfunc(&frag->btl->super, &desc);
                 }
 #if MCA_BTL_TCP_ENDPOINT_CACHE
                 if( 0 != btl_endpoint->endpoint_cache_length ) {
@@ -1077,6 +1087,7 @@ static void mca_btl_tcp_endpoint_send_handler(int sd, short flags, void* user)
             mca_btl_tcp_frag_t* frag = btl_endpoint->endpoint_send_frag;
             int btl_ownership = (frag->base.des_flags & MCA_BTL_DES_FLAGS_BTL_OWNERSHIP);
 
+            assert(btl_endpoint->endpoint_state == MCA_BTL_TCP_CONNECTED);
             if(mca_btl_tcp_frag_send(frag, btl_endpoint->endpoint_sd) == false) {
                 break;
             }

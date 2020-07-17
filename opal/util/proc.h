@@ -7,6 +7,8 @@
  * Copyright (c) 2014-2016 Research Organization for Information Science
  *                         and Technology (RIST). All rights reserved.
  * Copyright (c) 2017      Cisco Systems, Inc.  All rights reserved
+ * Copyright (c) 2020      Amazon.com, Inc. or its affiliates.  All Rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -20,8 +22,9 @@
 #include "opal_config.h"
 #include "opal/class/opal_list.h"
 #include "opal/mca/hwloc/hwloc-internal.h"
+#include "opal/mca/pmix/pmix-internal.h"
 #include "opal/types.h"
-#include "opal/dss/dss.h"
+#include "opal/dss/dss_types.h"
 
 #if OPAL_ENABLE_HETEROGENEOUS_SUPPORT
 #include <arpa/inet.h>
@@ -48,7 +51,7 @@
 #define OPAL_VPID_WILDCARD  (OPAL_VPID_MAX + 1)
 
 #define OPAL_PROC_MY_NAME           (opal_proc_local_get()->proc_name)
-#define OPAL_PROC_MY_HOSTNAME       (opal_proc_local_get()->proc_hostname)
+#define OPAL_PROC_MY_HOSTNAME       (opal_process_info.nodename)
 
 #define OPAL_NAME_WILDCARD      (&opal_name_wildcard)
 OPAL_DECLSPEC extern opal_process_name_t opal_name_wildcard;
@@ -91,9 +94,6 @@ typedef struct opal_proc_t {
     opal_hwloc_locality_t           proc_flags;
     /** Base convertor for the proc described by this process */
     struct opal_convertor_t*        proc_convertor;
-    /** A pointer to the name of this host - data is
-     * actually stored outside of this framework.  */
-    char*                           proc_hostname;
 } opal_proc_t;
 OBJ_CLASS_DECLARATION(opal_proc_t);
 
@@ -104,14 +104,28 @@ typedef struct {
 OBJ_CLASS_DECLARATION(opal_namelist_t);
 
 typedef struct opal_process_info_t {
+    opal_process_name_t my_name;
+    pmix_proc_t myprocid;
     bool nativelaunch;                  /**< launched by mpirun */
     char *nodename;                     /**< string name for this node */
     char *top_session_dir;              /**< Top-level session directory */
     char *job_session_dir;              /**< Session directory for job */
     char *proc_session_dir;             /**< Session directory for the process */
-    int32_t num_local_peers;            /**< number of procs from my job that share my node with me */
-    int32_t my_local_rank;              /**< local rank on this node within my job */
+    uint32_t num_local_peers;           /**< number of procs from my job that share my node with me */
+    uint16_t my_local_rank;             /**< local rank on this node within my job */
+    uint16_t my_node_rank;
     char *cpuset;                       /**< String-representation of bitmap where we are bound */
+    pid_t pid;
+    uint32_t num_procs;
+    uint32_t app_num;
+    uint32_t univ_size;
+    char *app_sizes;
+    char *app_ldrs;
+    char *command;
+    uint32_t num_apps;
+    char *initial_wdir;
+    uint32_t reincarnation;
+    bool proc_is_bound;
 } opal_process_info_t;
 OPAL_DECLSPEC extern opal_process_info_t opal_process_info;
 

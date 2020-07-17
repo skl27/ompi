@@ -32,7 +32,7 @@
 
 #include "ompi/constants.h"
 #include "opal/datatype/opal_convertor.h"
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 #include "opal/dss/dss.h"
 #include "opal/util/arch.h"
 #include "opal/util/show_help.h"
@@ -86,9 +86,6 @@ void ompi_proc_destruct(ompi_proc_t* proc)
      * destroyed here. It will be destroyed later when the ompi_datatype_finalize is called.
      */
     OBJ_RELEASE( proc->super.proc_convertor );
-    if (NULL != proc->super.proc_hostname) {
-        free(proc->super.proc_hostname);
-    }
     opal_mutex_lock (&ompi_proc_lock);
     opal_list_remove_item(&ompi_proc_list, (opal_list_item_t*)proc);
     opal_hash_table_remove_value_ptr (&ompi_proc_hash, &proc->super.proc_name, sizeof (proc->super.proc_name));
@@ -135,40 +132,36 @@ static int ompi_proc_allocate (ompi_jobid_t jobid, ompi_vpid_t vpid, ompi_proc_t
  */
 int ompi_proc_complete_init_single (ompi_proc_t *proc)
 {
-    int ret;
-
     if ((OMPI_CAST_RTE_NAME(&proc->super.proc_name)->jobid == OMPI_PROC_MY_NAME->jobid) &&
         (OMPI_CAST_RTE_NAME(&proc->super.proc_name)->vpid  == OMPI_PROC_MY_NAME->vpid)) {
         /* nothing else to do */
         return OMPI_SUCCESS;
     }
 
-    /* we can retrieve the hostname at no cost because it
-     * was provided at startup - but make it optional so
-     * we don't chase after it if some system doesn't
-     * provide it */
-    proc->super.proc_hostname = NULL;
-    OPAL_MODEX_RECV_VALUE_OPTIONAL(ret, PMIX_HOSTNAME, &proc->super.proc_name,
-                                   (char**)&(proc->super.proc_hostname), PMIX_STRING);
-
 #if OPAL_ENABLE_HETEROGENEOUS_SUPPORT
     /* get the remote architecture - this might force a modex except
      * for those environments where the RM provides it */
     {
         uint32_t *ui32ptr;
-        ui32ptr = &(proc->super.proc_arch);
-        OPAL_MODEX_RECV_VALUE(ret, PMIX_ARCH, &proc->super.proc_name,
-                              (void**)&ui32ptr, OPAL_UINT32);
-        if (OPAL_SUCCESS == ret) {
-            /* if arch is different than mine, create a new convertor for this proc */
-            if (proc->super.proc_arch != opal_local_arch) {
-                OBJ_RELEASE(proc->super.proc_convertor);
-                proc->super.proc_convertor = opal_convertor_create(proc->super.proc_arch, 0);
-            }
-        } else if (OMPI_ERR_NOT_IMPLEMENTED == ret) {
+        int ret;
+        /* if the proc is local, then no need to fetch it */
+        if (OPAL_PROC_ON_LOCAL_NODE(proc->super.proc_flags)) {
             proc->super.proc_arch = opal_local_arch;
         } else {
-            return ret;
+            ui32ptr = &(proc->super.proc_arch);
+            OPAL_MODEX_RECV_VALUE_OPTIONAL(ret, "OMPI_ARCH", &proc->super.proc_name,
+                                           (void**)&ui32ptr, OPAL_UINT32);
+            if (OPAL_SUCCESS == ret) {
+                /* if arch is different than mine, create a new convertor for this proc */
+                if (proc->super.proc_arch != opal_local_arch) {
+                    OBJ_RELEASE(proc->super.proc_convertor);
+                    proc->super.proc_convertor = opal_convertor_create(proc->super.proc_arch, 0);
+                }
+            } else if (OMPI_ERR_NOT_IMPLEMENTED == ret) {
+                proc->super.proc_arch = opal_local_arch;
+            } else {
+                return ret;
+            }
         }
     }
 #else
@@ -264,14 +257,13 @@ int ompi_proc_init(void)
     /* set local process data */
     ompi_proc_local_proc = proc;
     proc->super.proc_flags = OPAL_PROC_ALL_LOCAL;
-    proc->super.proc_hostname = strdup(ompi_process_info.nodename);
     proc->super.proc_arch = opal_local_arch;
     /* Register the local proc with OPAL */
     opal_proc_local_set(&proc->super);
 #if OPAL_ENABLE_HETEROGENEOUS_SUPPORT
     /* add our arch to the modex */
     OPAL_MODEX_SEND_VALUE(ret, PMIX_GLOBAL,
-                          PMIX_ARCH, &opal_local_arch, OPAL_UINT32);
+                          "OMPI_ARCH", &opal_local_arch, OPAL_UINT32);
     if (OPAL_SUCCESS != ret) {
         return ret;
     }
@@ -609,7 +601,6 @@ int ompi_proc_refresh(void)
         if (i == OMPI_PROC_MY_NAME->vpid) {
             ompi_proc_local_proc = proc;
             proc->super.proc_flags = OPAL_PROC_ALL_LOCAL;
-            proc->super.proc_hostname = ompi_process_info.nodename;
             proc->super.proc_arch = opal_local_arch;
             opal_proc_local_set(&proc->super);
         } else {
@@ -671,13 +662,6 @@ ompi_proc_pack(ompi_proc_t **proclist, int proclistsize,
         }
         /* pack architecture flag */
         rc = opal_dss.pack(buf, &(proc->super.proc_arch), 1, OPAL_UINT32);
-        if(rc != OPAL_SUCCESS) {
-            OMPI_ERROR_LOG(rc);
-            opal_mutex_unlock (&ompi_proc_lock);
-            return rc;
-        }
-        /* pass the name of the host this proc is on */
-        rc = opal_dss.pack(buf, &(proc->super.proc_hostname), 1, OPAL_STRING);
         if(rc != OPAL_SUCCESS) {
             OMPI_ERROR_LOG(rc);
             opal_mutex_unlock (&ompi_proc_lock);
@@ -747,10 +731,10 @@ ompi_proc_unpack(opal_buffer_t* buf,
         int32_t count=1;
         ompi_process_name_t new_name;
         uint32_t new_arch;
-        char *new_hostname;
         bool isnew = false;
         int rc;
         char *nspace;
+        uint16_t u16, *u16ptr;
 
         rc = opal_dss.unpack(buf, &new_name, &count, OMPI_NAME);
         if (rc != OPAL_SUCCESS) {
@@ -774,13 +758,6 @@ ompi_proc_unpack(opal_buffer_t* buf,
             free(newprocs);
             return rc;
         }
-        rc = opal_dss.unpack(buf, &new_hostname, &count, OPAL_STRING);
-        if (rc != OPAL_SUCCESS) {
-            OMPI_ERROR_LOG(rc);
-            free(plist);
-            free(newprocs);
-            return rc;
-        }
         /* see if this proc is already on our ompi_proc_list */
         plist[i] = ompi_proc_find_and_add(&new_name, &isnew);
         if (isnew) {
@@ -798,27 +775,25 @@ ompi_proc_unpack(opal_buffer_t* buf,
                 OBJ_RELEASE(plist[i]->super.proc_convertor);
                 plist[i]->super.proc_convertor = opal_convertor_create(plist[i]->super.proc_arch, 0);
 #else
+                char *errhost = opal_get_proc_hostname(&plist[i]->super);
                 opal_show_help("help-mpi-runtime.txt",
                                "heterogeneous-support-unavailable",
                                true, ompi_process_info.nodename,
-                               new_hostname == NULL ? "<hostname unavailable>" :
-                               new_hostname);
+                               errhost);
                 free(plist);
                 free(newprocs);
+                free(errhost);
                 return OMPI_ERR_NOT_SUPPORTED;
 #endif
             }
 
-            if (NULL != new_hostname) {
-                if (0 == strcmp(ompi_proc_local_proc->super.proc_hostname, new_hostname)) {
-                    plist[i]->super.proc_flags |= (OPAL_PROC_ON_NODE | OPAL_PROC_ON_CU | OPAL_PROC_ON_CLUSTER);
-                }
-
-                /* Save the hostname */
-                plist[i]->super.proc_hostname = new_hostname;
+            /* get the locality information - all RTEs are required
+             * to provide this information at startup */
+            u16ptr = &u16;
+            OPAL_MODEX_RECV_VALUE_OPTIONAL(rc, PMIX_LOCALITY, &plist[i]->super.proc_name, &u16ptr, PMIX_UINT16);
+            if (OPAL_SUCCESS == rc) {
+                plist[i]->super.proc_flags = u16;
             }
-        } else if (NULL != new_hostname) {
-            free(new_hostname);
         }
     }
 

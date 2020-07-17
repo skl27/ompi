@@ -101,7 +101,7 @@ int ompi_mtl_psm2_module_init(int local_rank, int num_local_procs) {
     char env_string[256];
     int rc;
 
-    generated_key = getenv(OPAL_MCA_PREFIX"orte_precondition_transports");
+    generated_key = getenv("OPA_TRANSPORT_KEY");
     memset(uu, 0, sizeof(psm2_uuid_t));
 
     if (!generated_key || (strlen(generated_key) != 33) ||
@@ -324,8 +324,9 @@ ompi_mtl_psm2_add_procs(struct mca_mtl_base_module_t *mtl,
 			    errstr ? errstr : "unknown connect error");
 		for (j = 0; j < (int) nprocs; j++) {
 		  if (errs_out[j] == thiserr) {
-                      opal_output(0, " %s", (NULL == procs[j]->super.proc_hostname) ?
-                                  "unknown" : procs[j]->super.proc_hostname);
+                      char *errhost = opal_get_proc_hostname(&procs[j]->super);
+                      opal_output(0, " %s", errhost);
+                      free(errhost);
 		  }
 		}
 		opal_output(0, "\n");

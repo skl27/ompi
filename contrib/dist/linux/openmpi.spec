@@ -9,7 +9,7 @@
 #                         University of Stuttgart.  All rights reserved.
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
-# Copyright (c) 2006-2019 Cisco Systems, Inc.  All rights reserved.
+# Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013      Mellanox Technologies, Inc.
 #                         All rights reserved.
 # Copyright (c) 2015      Research Organization for Information Science
@@ -150,6 +150,10 @@
 %global _binary_filedigest_algorithm 1
 %global _source_filedigest_algorithm 1
 
+# Define this to 1 if you want to keep libtool achive files
+# Default is 0 (remove *.la files)
+# type: bool (0/1)
+%{!?install_libtool_archive: %define install_libtool_archive 0}
 #############################################################################
 #
 # Configuration Logic
@@ -250,12 +254,12 @@ Requires: %{mpi_selector_rpm_name}
 
 %description
 Open MPI is an open source implementation of the Message Passing
-Interface specification (http://www.mpi-forum.org/) developed and
+Interface specification (https://www.mpi-forum.org/) developed and
 maintained by a consortium of research, academic, and industry
 partners.
 
 Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
+programming API (https://www.openshmem.org/).  OpenSHMEM is a
 Partitioned Global Address Space (PGAS) abstraction layer, which
 provides fast inter-process communication using one-sided
 communication techniques.
@@ -286,12 +290,12 @@ Requires: %{modules_rpm_name}
 
 %description runtime
 Open MPI is an open source implementation of the Message Passing
-Interface specification (http://www.mpi-forum.org/) developed and
+Interface specification (https://www.mpi-forum.org/) developed and
 maintained by a consortium of research, academic, and industry
 partners.
 
 Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
+programming API (https://www.openshmem.org/).  OpenSHMEM is a
 Partitioned Global Address Space (PGAS) abstraction layer, which
 provides fast inter-process communication using one-sided
 communication techniques.
@@ -319,12 +323,12 @@ Requires: %{name}-runtime
 
 %description devel
 Open MPI is an open source implementation of the Message Passing
-Interface specification (http://www.mpi-forum.org/) developed and
+Interface specification (https://www.mpi-forum.org/) developed and
 maintained by a consortium of research, academic, and industry
 partners.
 
 Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
+programming API (https://www.openshmem.org/).  OpenSHMEM is a
 Partitioned Global Address Space (PGAS) abstraction layer, which
 provides fast inter-process communication using one-sided
 communication techniques.
@@ -350,12 +354,12 @@ Requires: %{name}-runtime
 
 %description docs
 Open MPI is an open source implementation of the Message Passing
-Interface specification (http://www.mpi-forum.org/) developed and
+Interface specification (https://www.mpi-forum.org/) developed and
 maintained by a consortium of research, academic, and industry
 partners.
 
 Open MPI also includes an implementation of the OpenSHMEM parallel
-programming API (http://www.openshmem.org/).  OpenSHMEM is a
+programming API (https://www.openshmem.org/).  OpenSHMEM is a
 Partitioned Global Address Space (PGAS) abstraction layer, which
 provides fast inter-process communication using one-sided
 communication techniques.
@@ -477,6 +481,18 @@ export CFLAGS CXXFLAGS FCFLAGS
 # We've had cases of config.log being left in the installation tree.
 # We don't need that in an RPM.
 find $RPM_BUILD_ROOT -name config.log -exec rm -f {} \;
+
+%if !%{install_libtool_archive}
+# Libtool archive files (.la files) create an unnecessary dependency
+# between linked applications and the development versions of packages
+# upon which Open MPI depends. For example, when building an application
+# which uses Libtool, Open MPI would create a dependency not just on
+# the HWLOC libs package, but the HWLOC devel package
+# (to get the .so.1 -> .so symlink). Best practice in package builders
+# appears to be to skip shipping .la files because of this issue.
+find $RPM_BUILD_ROOT/%{_libdir} -name \*.la -exec rm -f {} \;
+%endif
+# End of libotool_archive if
 
 # First, the [optional] modulefile
 

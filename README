@@ -8,14 +8,14 @@ Copyright (c) 2004-2008 High Performance Computing Center Stuttgart,
                         University of Stuttgart.  All rights reserved.
 Copyright (c) 2004-2007 The Regents of the University of California.
                         All rights reserved.
-Copyright (c) 2006-2018 Cisco Systems, Inc.  All rights reserved.
+Copyright (c) 2006-2020 Cisco Systems, Inc.  All rights reserved.
 Copyright (c) 2006-2011 Mellanox Technologies. All rights reserved.
 Copyright (c) 2006-2012 Oracle and/or its affiliates.  All rights reserved.
 Copyright (c) 2007      Myricom, Inc.  All rights reserved.
 Copyright (c) 2008-2018 IBM Corporation.  All rights reserved.
 Copyright (c) 2010      Oak Ridge National Labs.  All rights reserved.
 Copyright (c) 2011      University of Houston. All rights reserved.
-Copyright (c) 2013-2017 Intel, Inc. All rights reserved.
+Copyright (c) 2013-2020 Intel, Inc.  All rights reserved.
 Copyright (c) 2015      NVIDIA Corporation.  All rights reserved.
 Copyright (c) 2017-2018 Los Alamos National Security, LLC.  All rights
                         reserved.
@@ -35,7 +35,7 @@ When submitting questions and problems, be sure to include as much
 extra information as possible.  This web page details all the
 information that we request in order to provide assistance:
 
-     http://www.open-mpi.org/community/help/
+     https://www.open-mpi.org/community/help/
 
 The best way to report bugs, send comments, or ask questions is to
 sign up on the user's and/or developer's mailing list (for user-level
@@ -51,8 +51,8 @@ address -- joe@example.com is considered different than
 joe@mycomputer.example.com!).  Visit these pages to subscribe to the
 lists:
 
-     http://lists.open-mpi.org/mailman/listinfo/users
-     http://lists.open-mpi.org/mailman/listinfo/devel
+     https://lists.open-mpi.org/mailman/listinfo/users
+     https://lists.open-mpi.org/mailman/listinfo/devel
 
 Thanks for your time.
 
@@ -118,7 +118,7 @@ The rest of this README file contains:
 ===========================================================================
 
 The following abbreviated list of release notes applies to this code
-base as of this writing (March 2017):
+base as of this writing (April 2020):
 
 General notes
 -------------
@@ -176,18 +176,17 @@ General notes
 
 - Systems that have been tested are:
   - Linux (various flavors/distros), 64 bit (x86, ppc, aarch64),
-    with gcc (4.8.x+), Absoft (fortran), Intel, and Portland (*)
-  - macOS (10.12), 64 bit (x85_64) with XCode compilers
+    with gcc (>=4.8.x+), clang (>=3.6.0), Absoft (fortran), Intel,
+    and Portland (*)
+  - macOS (10.14-10.15), 64 bit (x86_64) with XCode compilers
 
   (*) Be sure to read the Compiler Notes, below.
 
-- Other systems have been lightly (but not fully tested):
+- Other systems have been lightly (but not fully) tested:
   - Linux (various flavors/distros), 32 bit, with gcc
   - Cygwin 32 & 64 bit with gcc
   - ARMv6, ARMv7
   - Other 64 bit platforms.
-  - Oracle Solaris 10 and 11, 32 and 64 bit (SPARC, i386, x86_64),
-    with Oracle Solaris Studio 12.5
   - OpenBSD.  Requires configure options --enable-mca-no-build=patcher
     and --disable-dlopen with this release.
   - Problems have been reported when building Open MPI on FreeBSD 11.1
@@ -212,6 +211,10 @@ Compiler Notes
 --------------
 
 - Open MPI requires a C99-capable compiler to build.
+
+- On platforms other than x86-64, ARM, and PPC, Open MPI requires a
+  compiler that either supports C11 atomics or the GCC "__atomic"
+  atomics (e.g., GCC >= v4.7.2).
 
 - Mixing compilers from different vendors when building Open MPI
   (e.g., using the C/C++ compiler from one vendor and the Fortran
@@ -301,12 +304,6 @@ Compiler Notes
   are now preferred by the Solaris Studio compilers.  GCC may
   require either "-m32" or "-mcpu=v9 -m32", depending on GCC version.
 
-- It has been noticed that if one uses CXX=sunCC, in which sunCC
-  is a link in the Solaris Studio compiler release, that the OMPI
-  build system has issue with sunCC and does not build libmpi_cxx.so.
-  Therefore  the make install fails.  So we suggest that one should
-  use CXX=CC, which works, instead of CXX=sunCC.
-
 - If one tries to build OMPI on Ubuntu with Solaris Studio using the C++
   compiler and the -m32 option, you might see a warning:
 
@@ -325,13 +322,6 @@ Compiler Notes
 - At least some versions of the Intel 8.1 compiler seg fault while
   compiling certain Open MPI source code files.  As such, it is not
   supported.
-
-- The Intel 9.0 v20051201 compiler on IA64 platforms seems to have a
-  problem with optimizing the ptmalloc2 memory manager component (the
-  generated code will segv).  As such, the ptmalloc2 component will
-  automatically disable itself if it detects that it is on this
-  platform/compiler combination.  The only effect that this should
-  have is that the MCA parameter mpi_leave_pinned will be inoperative.
 
 - It has been reported that the Intel 9.1 and 10.0 compilers fail to
   compile Open MPI on IA64 platforms.  As of 12 Sep 2012, there is
@@ -407,7 +397,7 @@ Compiler Notes
   compiler Open MPI was configured and compiled.
 
   There are up to three sets of Fortran MPI bindings that may be
-  provided depending on your Fortran compiler):
+  provided (depending on your Fortran compiler):
 
   - mpif.h: This is the first MPI Fortran interface that was defined
     in MPI-1.  It is a file that is included in Fortran source code.
@@ -422,7 +412,7 @@ Compiler Notes
     example, MPI handles have distinct types (vs. all being integers).
     See the MPI-3 document for more details.
 
-    *** The mpi_f08 module is STRONGLY is recommended for all new MPI
+    *** The mpi_f08 module is STRONGLY recommended for all new MPI
         Fortran subroutines and applications.  Note that the mpi_f08
         module can be used in conjunction with the other two Fortran
         MPI bindings in the same application (only one binding can be
@@ -442,7 +432,7 @@ Compiler Notes
 
   - All Fortran compilers support the mpif.h/shmem.fh-based bindings,
     with one exception: the MPI_SIZEOF interfaces will only be present
-    when Open MPI is built with a Fortran compiler that support the
+    when Open MPI is built with a Fortran compiler that supports the
     INTERFACE keyword and ISO_FORTRAN_ENV.  Most notably, this
     excludes the GNU Fortran compiler suite before version 4.9.
 
@@ -487,7 +477,7 @@ General Run-Time Support Notes
 ------------------------------
 
 - The Open MPI installation must be in your PATH on all nodes (and
-  potentially LD_LIBRARY_PATH (or DYLD_LIBRARY_PATH), if libmpi/libshmem
+  potentially LD_LIBRARY_PATH or DYLD_LIBRARY_PATH, if libmpi/libshmem
   is a shared library), unless using the --prefix or
   --enable-mpirun-prefix-by-default functionality (see below).
 
@@ -604,7 +594,6 @@ MPI Functionality and Features
       - tcp
       - ugni
       - usnic
-      - vader (shared memory)
 
   Currently, MPI File operations are not thread safe even if MPI is
   initialized for MPI_THREAD_MULTIPLE support.
@@ -685,19 +674,19 @@ Network Support
     - SMCUDA
     - Cisco usNIC
     - uGNI (Cray Gemini, Aries)
-    - vader (XPMEM, Linux CMA, Linux KNEM, and copy-in/copy-out shared
-      memory)
+    - shared memory (XPMEM, Linux CMA, Linux KNEM, and
+      copy-in/copy-out shared memory)
 
   - "cm" supports a smaller number of networks (and they cannot be
     used together), but may provide better overall MPI performance:
 
-    - Intel Omni-Path PSM2
+    - Intel Omni-Path PSM2 (version 11.2.173 or later)
     - Intel True Scale PSM (QLogic InfiniPath)
     - OpenFabrics Interfaces ("libfabric" tag matching)
     - Portals 4
 
   - UCX is the Unified Communication X (UCX) communication library
-    (http://www.openucx.org/).  This is an open-source project
+    (https://www.openucx.org/).  This is an open-source project
     developed in collaboration between industry, laboratories, and
     academia to create an open-source production grade communication
     framework for data centric and high-performance applications.  The
@@ -769,7 +758,7 @@ Network Support
 - The OpenFabrics Enterprise Distribution (OFED) software package v1.0
   will not work properly with Open MPI v1.2 (and later) due to how its
   Mellanox InfiniBand plugin driver is created.  The problem is fixed
-  OFED v1.1 (and later).
+  with OFED v1.1 (and later).
 
 - Better memory management support is available for OFED-based
   transports using the "ummunotify" Linux kernel module.  OFED memory
@@ -788,23 +777,23 @@ Network Support
   same memory managers from prior versions of Open MPI will be used.
   The ummunotify Linux kernel module can be downloaded from:
 
-    http://lwn.net/Articles/343351/
+    https://lwn.net/Articles/343351/
 
 - The use of fork() with OpenFabrics-based networks (i.e., the UCX
   PML) is only partially supported, and only on Linux kernels >=
   v2.6.15 with libibverbs v1.1 or later (first released as part of
   OFED v1.2), per restrictions imposed by the OFED network stack.
 
-- Linux "knem" support is used when the "vader" or "sm" (shared
-  memory) BTLs are compiled with knem support (see the --with-knem
-  configure option) and the knem Linux module is loaded in the running
-  kernel.  If the knem Linux kernel module is not loaded, the knem
-  support is (by default) silently deactivated during Open MPI jobs.
+- Linux "knem" support is used when the "sm" (shared memory) BTL is
+  compiled with knem support (see the --with-knem configure option)
+  and the knem Linux module is loaded in the running kernel.  If the
+  knem Linux kernel module is not loaded, the knem support is (by
+  default) silently deactivated during Open MPI jobs.
 
-  See http://runtime.bordeaux.inria.fr/knem/ for details on Knem.
+  See https://knem.gforge.inria.fr/ for details on Knem.
 
-- Linux Cross-Memory Attach (CMA) or XPMEM is used by the vader
-  shared-memory BTL when the CMA/XPMEM libraries are installedm,
+- Linux Cross-Memory Attach (CMA) or XPMEM is used by the "sm" shared
+  memory BTL when the CMA/XPMEM libraries are installedm,
   respectively.  Linux CMA and XPMEM are similar (but different)
   mechanisms for Open MPI to utilize single-copy semantics for shared
   memory.
@@ -1055,7 +1044,7 @@ NETWORKING SUPPORT / OPTIONS
   knem is a Linux kernel module that allows direct process-to-process
   memory copies (optionally using hardware offload), potentially
   increasing bandwidth for large messages sent between messages on the
-  same server.  See http://knem.gforge.inria.fr/ for
+  same server.  See https://knem.gforge.inria.fr/ for
   details.
 
 --with-libfabric=<directory>
@@ -1309,7 +1298,7 @@ MPI FUNCTIONALITY
              the value of the MCA parameter mpi_param_check (default:
              yes).
     yes:     Synonym for "always" (same as --with-mpi-param-check).
-    no:      Synonym for "none" (same as --without-mpi-param-check).
+    no:      Synonym for "never" (same as --without-mpi-param-check).
 
   If --with-mpi-param is not specified, "runtime" is the default.
 
@@ -1420,7 +1409,7 @@ MISCELLANEOUS FUNCTIONALITY
 --with-wrapper-fcflags=<fcflags>
 --with-wrapper-ldflags=<ldflags>
 --with-wrapper-libs=<libs>
-  Add the specified flags to the default flags that used are in Open
+  Add the specified flags to the default flags that are used in Open
   MPI's "wrapper" compilers (e.g., mpicc -- see below for more
   information about Open MPI's wrapper compilers).  By default, Open
   MPI's wrapper compilers use the same compilers used to build Open
@@ -1910,11 +1899,11 @@ equivalent) to launch MPI applications.  For example:
   or
   shell$ mpiexec -np 1 hello_world_mpi : -np 1 hello_world_mpi
 
-are equivalent. 
+are equivalent.
 
 The rsh launcher (which defaults to using ssh) accepts a --hostfile
 parameter (the option "--machinefile" is equivalent); you can specify a
---hostfile parameter indicating an standard mpirun-style hostfile (one
+--hostfile parameter indicating a standard mpirun-style hostfile (one
 hostname per line):
 
   shell$ mpirun --hostfile my_hostfile -np 2 hello_world_mpi
@@ -1930,7 +1919,7 @@ node3.example.com slots=2
 node4.example.com slots=4
 ---------------------------------------------------------------------------
 
-  shell$ mpirun -hostfile my_hostfile -np 8 hello_world_mpi
+  shell$ mpirun --hostfile my_hostfile -np 8 hello_world_mpi
 
 will launch MPI_COMM_WORLD rank 0 on node1, rank 1 on node2, ranks 2
 and 3 on node3, and ranks 4 through 7 on node4.
@@ -2164,14 +2153,14 @@ comma-delimited list to the "btl" MCA parameter:
 
    shell$ mpirun --mca btl tcp,self hello_world_mpi
 
-To add shared memory support, add "vader" into the command-delimited
-list (list order does not matter):
+To add shared memory support, add "sm" into the command-delimited list
+(list order does not matter):
 
-   shell$ mpirun --mca btl tcp,vader,self hello_world_mpi
+   shell$ mpirun --mca btl tcp,sm,self hello_world_mpi
 
-(there is an "sm" shared memory BTL, too, but "vader" is a newer
-generation of shared memory support; by default, "vader" will be used
-instead of "sm")
+(there used to be a "vader" BTL for shared memory support; it was
+renamed to "sm" in Open MPI v5.0.0, but the alias "vader" still works
+as well)
 
 To specifically deactivate a specific component, the comma-delimited
 list can be prepended with a "^" to negate it:
@@ -2213,7 +2202,7 @@ joe@example.com is considered different than
 joe@mycomputer.example.com!).  Visit this page to subscribe to the
 user's list:
 
-     http://lists.open-mpi.org/mailman/listinfo/users
+     https://lists.open-mpi.org/mailman/listinfo/users
 
 Developer-level bug reports, questions, and comments should generally
 be sent to the developer's mailing list (devel@lists.open-mpi.org).
@@ -2221,6 +2210,6 @@ Please do not post the same question to both lists.  As with the
 user's list, only subscribers are allowed to post to the developer's
 list.  Visit the following web page to subscribe:
 
-     http://lists.open-mpi.org/mailman/listinfo/devel
+     https://lists.open-mpi.org/mailman/listinfo/devel
 
 Make today an Open MPI day!

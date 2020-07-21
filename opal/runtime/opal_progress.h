@@ -14,6 +14,7 @@
  * Copyright (c) 2018      Triad National Security, LLC. All rights
  *                         reserved.
  *
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -33,8 +34,7 @@
 BEGIN_C_DECLS
 
 #include "opal_config.h"
-#include "opal/threads/mutex.h"
-#include "opal/runtime/opal.h"
+#include "opal/mca/threads/mutex.h"
 
 /**
  * Initialize the progress engine

@@ -5,6 +5,8 @@
  *                         reserved.
  * Copyright (c) 2019      Research Organization for Information Science
  *                         and Technology (RIST).  All rights reserved.
+ * Copyright (c) 2020      Triad National Security, LLC. All rights
+ *                         reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -24,11 +26,9 @@
 
 #include "opal/mca/mca.h"
 #include "opal/mca/event/event.h"
-#include "opal/dss/dss.h"
-#include "opal/runtime/opal.h"
+#include "opal/mca/threads/threads.h"
 #include "opal/dss/dss.h"
 #include "opal/util/error.h"
-#include "opal/util/proc.h"
 #include "opal/hash_string.h"
 
 /* include implementation to call */
@@ -61,21 +61,31 @@ typedef struct {
 } opal_info_item_t;
 OBJ_CLASS_DECLARATION(opal_info_item_t);
 
+/* define the equivalent to opal_namelist_t for pmix_proc_t */
+typedef struct {
+    opal_list_item_t super;
+    pmix_proc_t procid;
+} opal_proclist_t;
+OBJ_CLASS_DECLARATION(opal_proclist_t);
+
+
+typedef opal_cond_t opal_pmix_condition_t;
 
 typedef struct {
     opal_mutex_t mutex;
-    pthread_cond_t cond;
+    opal_pmix_condition_t cond;
     volatile bool active;
     int status;
     char *msg;
 } opal_pmix_lock_t;
 
-#define opal_pmix_condition_wait(a,b)   pthread_cond_wait(a, &(b)->m_lock_pthread)
+#define opal_pmix_condition_wait(a,b)    opal_cond_wait(a, b)
+#define opal_pmix_condition_broadcast(a) opal_cond_broadcast(a)
 
 #define OPAL_PMIX_CONSTRUCT_LOCK(l)                     \
     do {                                                \
         OBJ_CONSTRUCT(&(l)->mutex, opal_mutex_t);       \
-        pthread_cond_init(&(l)->cond, NULL);            \
+        opal_cond_init(&(l)->cond);                     \
         (l)->active = true;                             \
         (l)->status = 0;                                \
         (l)->msg = NULL;                                \
@@ -86,7 +96,7 @@ typedef struct {
     do {                                    \
         OPAL_ACQUIRE_OBJECT((l));           \
         OBJ_DESTRUCT(&(l)->mutex);          \
-        pthread_cond_destroy(&(l)->cond);   \
+        opal_cond_destroy(&(l)->cond);      \
         if (NULL != (l)->msg) {             \
             free((l)->msg);                 \
         }                                   \
@@ -161,7 +171,7 @@ typedef struct {
                         __FILE__, __LINE__);            \
         }                                               \
         (lck)->active = false;                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
+        opal_pmix_condition_broadcast(&(lck)->cond);    \
         opal_mutex_unlock(&(lck)->mutex);               \
     } while(0)
 #else
@@ -169,18 +179,17 @@ typedef struct {
     do {                                                \
         assert(0 != opal_mutex_trylock(&(lck)->mutex)); \
         (lck)->active = false;                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
+        opal_pmix_condition_broadcast(&(lck)->cond);    \
         opal_mutex_unlock(&(lck)->mutex);               \
     } while(0)
 #endif
-
 
 #define OPAL_PMIX_WAKEUP_THREAD(lck)                    \
     do {                                                \
         opal_mutex_lock(&(lck)->mutex);                 \
         (lck)->active = false;                          \
         OPAL_POST_OBJECT(lck);                          \
-        pthread_cond_broadcast(&(lck)->cond);           \
+        opal_pmix_condition_broadcast(&(lck)->cond);    \
         opal_mutex_unlock(&(lck)->mutex);               \
     } while(0)
 
@@ -207,7 +216,6 @@ typedef struct {
         pmix_value_t _kv;                       \
         PMIX_VALUE_LOAD(&_kv, (d), (t));        \
         (r) = PMIx_Put((sc), (s), &(_kv));      \
-                OPAL_ERROR_LOG((r));            \
     } while(0);
 
 /**
@@ -595,18 +603,29 @@ OPAL_DECLSPEC int opal_pmix_convert_nspace(opal_jobid_t *jobid, pmix_nspace_t ns
 OPAL_DECLSPEC void opal_pmix_setup_nspace_tracker(void);
 OPAL_DECLSPEC void opal_pmix_finalize_nspace_tracker(void);
 
+#define OPAL_SCHEMA_DELIMITER_CHAR      '.'
+#define OPAL_SCHEMA_WILDCARD_CHAR       '*'
+#define OPAL_SCHEMA_WILDCARD_STRING     "*"
+#define OPAL_SCHEMA_INVALID_CHAR        '$'
+#define OPAL_SCHEMA_INVALID_STRING      "$"
+
+/* convert jobid to nspace */
 #define OPAL_PMIX_CONVERT_JOBID(n, j) \
     opal_pmix_convert_jobid((n), (j))
 
-#define OPAL_PMIX_CONVERT_VPID(r, v)        \
-    do {                                    \
-        if (OPAL_VPID_WILDCARD == (v)) {    \
-            (r) = PMIX_RANK_WILDCARD;       \
-        } else {                            \
-            (r) = (v);                      \
-        }                                   \
+/* convert vpid to rank */
+#define OPAL_PMIX_CONVERT_VPID(r, v)                \
+    do {                                            \
+        if (OPAL_VPID_WILDCARD == (v)) {            \
+            (r) = PMIX_RANK_WILDCARD;               \
+        } else if (OPAL_VPID_INVALID == (v)) {      \
+            (r) = PMIX_RANK_INVALID;                \
+        } else {                                    \
+            (r) = (v);                              \
+        }                                           \
     } while(0)
 
+/* convert opal_process_name_t to pmix_proc_t */
 #define OPAL_PMIX_CONVERT_NAME(p, n)                        \
     do {                                                    \
         OPAL_PMIX_CONVERT_JOBID((p)->nspace, (n)->jobid);   \
@@ -614,9 +633,11 @@ OPAL_DECLSPEC void opal_pmix_finalize_nspace_tracker(void);
     } while(0)
 
 
+/* convert nspace to jobid */
 #define OPAL_PMIX_CONVERT_NSPACE(r, j, n)       \
     (r) = opal_pmix_convert_nspace((j), (n))
 
+/* convert pmix rank to opal vpid */
 #define OPAL_PMIX_CONVERT_RANK(v, r)            \
     do {                                        \
         if (PMIX_RANK_WILDCARD == (r)) {        \
@@ -628,12 +649,40 @@ OPAL_DECLSPEC void opal_pmix_finalize_nspace_tracker(void);
         }                                       \
     } while(0)
 
+/* convert pmix_proc_t to opal_process_name_t */
 #define OPAL_PMIX_CONVERT_PROCT(r, n, p)                            \
     do {                                                            \
         OPAL_PMIX_CONVERT_NSPACE((r), &(n)->jobid, (p)->nspace);    \
         if (OPAL_SUCCESS == (r)) {                                  \
             OPAL_PMIX_CONVERT_RANK((n)->vpid, (p)->rank);           \
         }                                                           \
+    } while(0)
+
+#define OPAL_PMIX_CONVERT_PROCT_TO_STRING(s, p)                         \
+    do {                                                                \
+        if (PMIX_RANK_WILDCARD == (p)->rank) {                          \
+            (void)opal_asprintf((s), "%s.*", (p)->nspace);              \
+        } else if (PMIX_RANK_INVALID == (p)->rank) {                    \
+            (void)opal_asprintf((s), "%s.$", (p)->nspace);              \
+        } else {                                                        \
+            (void)opal_asprintf((s), "%s.%u", (p)->nspace, (p)->rank);  \
+        }                                                               \
+    } while(0)
+
+#define OPAL_PMIX_CONVERT_STRING_TO_PROCT(p, s)     \
+    do {                                            \
+        char *_ptr;                                 \
+        _ptr = strrchr((s), '.');                   \
+        *_ptr = '\0';                               \
+        _ptr++;                                     \
+        PMIX_LOAD_NSPACE((p)->nspace, (s));         \
+        if ('*' == *_ptr) {                         \
+            (p)->rank = PMIX_RANK_WILDCARD;         \
+        } else if ('$' == *_ptr) {                  \
+            (p)->rank = PMIX_RANK_INVALID;          \
+        } else {                                    \
+            (p)->rank = strtoul(_ptr, NULL, 10);    \
+        }                                           \
     } while(0)
 
 OPAL_DECLSPEC void opal_pmix_value_load(pmix_value_t *v,

@@ -2,7 +2,7 @@ dnl
 dnl Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
 dnl                         University Research and Technology
 dnl                         Corporation.  All rights reserved.
-dnl Copyright (c) 2004-2018 The University of Tennessee and The University
+dnl Copyright (c) 2004-2020 The University of Tennessee and The University
 dnl                         of Tennessee Research Foundation.  All rights
 dnl                         reserved.
 dnl Copyright (c) 2004-2006 High Performance Computing Center Stuttgart,
@@ -18,6 +18,7 @@ dnl                         reserved.
 dnl Copyright (c) 2017      Amazon.com, Inc. or its affiliates.  All Rights
 dnl                         reserved.
 dnl Copyright (c) 2020      Google, LLC. All rights reserved.
+dnl Copyright (c) 2020      Intel, Inc.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -833,7 +834,7 @@ AC_DEFUN([OPAL_CHECK_ASM_GNU_STACKEXEC], [
 int testfunc() {return 0; }
 EOF
              OPAL_LOG_COMMAND([$CC $CFLAGS -c conftest.c -o conftest.$OBJEXT],
-                 [$OBJDUMP -x conftest.$OBJEXT | $GREP '\.note\.GNU-stack' > /dev/null && opal_cv_asm_gnu_stack_result=yes],
+                 [$OBJDUMP -x conftest.$OBJEXT 2>&1 | $GREP '\.note\.GNU-stack' &> /dev/null && opal_cv_asm_gnu_stack_result=yes],
                  [OPAL_LOG_MSG([the failed program was:], 1)
                   OPAL_LOG_FILE([conftest.c])
                   opal_cv_asm_gnu_stack_result=no])
@@ -1254,7 +1255,7 @@ AC_DEFUN([OPAL_CONFIG_ASM],[
 
     # Check for RDTSCP support
     result=0
-    AS_IF([test "$opal_cv_asm_arch" = "OPAL_X86_64" || test "$opal_cv_asm_arch" = "OPAL_IA32"],
+    AS_IF([test "$opal_cv_asm_arch" = "X86_64" || test "$opal_cv_asm_arch" = "IA32"],
           [AC_MSG_CHECKING([for RDTSCP assembly support])
            AC_LANG_PUSH([C])
            AC_TRY_RUN([[

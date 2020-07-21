@@ -79,7 +79,7 @@
 #include "opal/mca/btl/base/btl_base_error.h"
 #include "opal/mca/reachable/base/base.h"
 #include "opal/mca/pmix/pmix-internal.h"
-#include "opal/threads/threads.h"
+#include "opal/mca/threads/threads.h"
 
 #include "opal/constants.h"
 #include "opal/mca/btl/btl.h"
@@ -1234,6 +1234,7 @@ static int mca_btl_tcp_component_exchange(void)
                                  opal_net_get_hostname(addr));
          } else {
              BTL_ERROR(("Unexpected address family: %d", addr->sa_family));
+             free(addrs);
              return OPAL_ERR_BAD_PARAM;
          }
 

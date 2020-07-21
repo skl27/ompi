@@ -107,7 +107,7 @@ int mca_common_ompio_simple_grouping(ompio_file_t *fh,
     /* Determine whether to use the formula for 1-D or 2-D data decomposition. Anything
     ** that is not 1-D is assumed to be 2-D in this version
     */ 
-    mode = ( fh->f_cc_size == fh->f_view_size ) ? 1 : 2;
+    mode = ( fh->f_cc_size == fh->f_avg_view_size ) ? 1 : 2;
 
     /* Determine the increment size when searching the optimal
     ** no. of aggregators 
@@ -1303,12 +1303,14 @@ int mca_common_ompio_prepare_to_group(ompio_file_t *fh,
                                            fh->f_comm);
     if ( OMPI_SUCCESS != ret ) {
         opal_output (1, "mca_common_ompio_prepare_to_group: error in ompi_fcoll_base_coll_allgather_array\n");
+        free(start_offsets_lens_tmp);
         goto exit;
     }
     end_offsets_tmp = (OMPI_MPI_OFFSET_TYPE* )malloc (fh->f_init_procs_per_group * sizeof(OMPI_MPI_OFFSET_TYPE));
     if (NULL == end_offsets_tmp) {
         opal_output (1, "OUT OF MEMORY\n");
-        goto exit;
+        free(start_offsets_lens_tmp);
+        return OMPI_ERR_OUT_OF_RESOURCE;
     }
     for( k = 0 ; k < fh->f_init_procs_per_group; k++){
         end_offsets_tmp[k] = start_offsets_lens_tmp[3*k] + start_offsets_lens_tmp[3*k+1];
@@ -1333,14 +1335,12 @@ int mca_common_ompio_prepare_to_group(ompio_file_t *fh,
        if (NULL == aggr_bytes_per_group_tmp) {
           opal_output (1, "OUT OF MEMORY\n");
           ret = OMPI_ERR_OUT_OF_RESOURCE;
-          free(end_offsets_tmp);
           goto exit;
        }
     decision_list_tmp = (int* )malloc (fh->f_init_num_aggrs * sizeof(int));
     if (NULL == decision_list_tmp) {
         opal_output (1, "OUT OF MEMORY\n");
         ret = OMPI_ERR_OUT_OF_RESOURCE;
-        free(end_offsets_tmp);
         if (NULL != aggr_bytes_per_group_tmp) {
             free(aggr_bytes_per_group_tmp);
         }

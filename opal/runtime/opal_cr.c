@@ -69,8 +69,8 @@
 #include "opal/mca/memory/base/base.h"
 #include "opal/mca/timer/base/base.h"
 
-#include "opal/threads/mutex.h"
-#include "opal/threads/threads.h"
+#include "opal/mca/threads/mutex.h"
+#include "opal/mca/threads/threads.h"
 #include "opal/mca/crs/base/base.h"
 
 /******************
@@ -870,7 +870,7 @@ int opal_cr_user_inc_register_callback(opal_cr_user_inc_callback_event_t event,
                                        opal_cr_user_inc_callback_fn_t  function,
                                        opal_cr_user_inc_callback_fn_t  *prev_function)
 {
-    if (event >= OPAL_CR_INC_MAX) {
+    if (OPAL_UNLIKELY(event >= OPAL_CR_INC_MAX)) {
         return OPAL_ERROR;
     }
 
@@ -888,12 +888,12 @@ int opal_cr_user_inc_register_callback(opal_cr_user_inc_callback_event_t event,
 int ompi_trigger_user_inc_callback(opal_cr_user_inc_callback_event_t event,
                               opal_cr_user_inc_callback_state_t state)
 {
-    if( NULL == cur_user_coord_callback[event] ) {
-        return OPAL_SUCCESS;
+    if (OPAL_UNLIKELY(event >= OPAL_CR_INC_MAX)) {
+        return OPAL_ERROR;
     }
 
-    if (event >= OPAL_CR_INC_MAX) {
-        return OPAL_ERROR;
+    if( NULL == cur_user_coord_callback[event] ) {
+        return OPAL_SUCCESS;
     }
 
     return ((cur_user_coord_callback[event])(event, state));

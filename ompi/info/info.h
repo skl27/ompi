@@ -15,6 +15,7 @@
  * Copyright (c) 2012-2015 Los Alamos National Security, LLC. All rights
  *                         reserved.
  * Copyright (c) 2016-2017 IBM Corporation. All rights reserved.
+ * Copyright (c) 2020      Intel, Inc.  All rights reserved.
  * $COPYRIGHT$
  *
  * Additional copyrights may follow
@@ -32,7 +33,7 @@
 #include "opal/util/info.h"
 #include "opal/class/opal_list.h"
 #include "opal/class/opal_pointer_array.h"
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 
 #include "opal/mca/base/mca_base_var_enum.h"
 
@@ -119,7 +120,7 @@ OMPI_DECLSPEC int ompi_info_set_value_enum (ompi_info_t *info, const char *key, 
 /**
  * ompi_info_foo() wrapper around various opal_info_foo() calls
  */
-OMPI_DECLSPEC int ompi_info_get_bool (ompi_info_t *info, char *key, bool *value, int *flag);
+OMPI_DECLSPEC int ompi_info_get_bool (ompi_info_t *info, const char *key, bool *value, int *flag);
 /**
  * ompi_info_foo() wrapper around various opal_info_foo() calls
  */

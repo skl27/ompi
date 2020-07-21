@@ -26,6 +26,8 @@
 # Copyright (c) 2018      Amazon.com, Inc. or its affiliates.
 #                         All Rights reserved.
 # Copyright (c) 2018      FUJITSU LIMITED.  All rights reserved.
+# Copyright (c) 2019      Triad National Security, LLC. All rights
+#                         reserved.
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -53,7 +55,7 @@ AC_LANG([C])
 
 AC_INIT([project_name_long],
         [m4_normalize(esyscmd([config/opal_get_version.sh VERSION --tarball]))],
-        [http://www.open-mpi.org/community/help/], [project_name_short])
+        [https://www.open-mpi.org/community/help/], [project_name_short])
 AC_PREREQ(2.60)
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -68,12 +70,13 @@ OPAL_LOAD_PLATFORM
 # Start it up
 #
 
+OPAL_CONFIGURE_SETUP
+opal_show_title "Configuring project_name_long"
+opal_show_subtitle "Prerequisites"
+
 AC_CHECK_PROG([PERL],[perl],[perl],[no])
 AS_IF([test "X$PERL" = "Xno"],
       [AC_MSG_ERROR(["Open MPI requires perl. Aborting"])])
-
-OPAL_CONFIGURE_SETUP
-opal_show_title "Configuring project_name_long"
 
 #
 # Setup some things that must be done before AM-INIT-AUTOMAKE
@@ -302,6 +305,8 @@ m4_ifdef([project_ompi],
 AM_ENABLE_SHARED
 AM_DISABLE_STATIC
 
+# Must be called before OPAL_SETUP_CC to get the value of CC
+# before it is modified by the C99/C11 checks.
 OPAL_SETUP_WRAPPER_INIT
 
 ##################################
@@ -946,22 +951,6 @@ OPAL_CHECK_BROKEN_QSORT
 # all: type of recvfrom optlen
 
 #
-# Check out what thread support we have
-#
-OPAL_CONFIG_THREADS
-
-CFLAGS="$CFLAGS $THREAD_CFLAGS"
-CPPFLAGS="$CPPFLAGS $THREAD_CPPFLAGS"
-LDFLAGS="$LDFLAGS $THREAD_LDFLAGS"
-LIBS="$LIBS $THREAD_LIBS"
-
-OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
-OPAL_WRAPPER_FLAGS_ADD([CXXFLAGS], [$THREAD_CXXFLAGS])
-OPAL_WRAPPER_FLAGS_ADD([FCFLAGS], [$THREAD_FCFLAGS])
-OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
-# no need to update WRAPPER_EXTRA_LIBS - we'll get it from LT later
-
-#
 # What is the local equivalent of "ln -s"
 #
 
@@ -990,10 +979,16 @@ if test -z "$LEX" || \
         AC_MSG_WARN([*** Could not find Flex on your system.])
         AC_MSG_WARN([*** Flex is required for developer builds of Open MPI.])
         AC_MSG_WARN([*** Other versions of Lex are not supported.])
-        AC_MSG_WARN([*** YOU DO NOT NEED FLEX WHEN BUILDING DISTRIBUTION TARBALLS!])
+        AC_MSG_WARN([*** NOTE: If you are building a tarball downloaded from www.open-mpi.org, you do not need Flex])
         AC_MSG_ERROR([Cannot continue])
     fi
 fi
+
+#
+# Setup man page processing
+#
+
+OPAL_SETUP_MAN_PAGES
 
 #
 # File system case sensitivity
@@ -1113,6 +1108,14 @@ AC_MSG_RESULT([$opal_subdir_args])
 
 OPAL_MCA
 
+#
+# Now that we know how to support threads with wrappers, update
+#
+OPAL_WRAPPER_FLAGS_ADD([CFLAGS], [$THREAD_CFLAGS])
+OPAL_WRAPPER_FLAGS_ADD([CXXFLAGS], [$THREAD_CXXFLAGS])
+OPAL_WRAPPER_FLAGS_ADD([FCFLAGS], [$THREAD_FCFLAGS])
+OPAL_WRAPPER_FLAGS_ADD([LDFLAGS], [$THREAD_LDFLAGS])
+
 m4_ifdef([project_ompi], [OMPI_REQUIRE_ENDPOINT_TAG_FINI])
 
 # Last minute disable of OpenSHMEM if we didn't find any oshmem SPMLs
@@ -1197,7 +1200,7 @@ if test "x$opal_cv_c_compiler_vendor" = "xsun"; then
 fi
 
 # Due to this thread:
-# http://www.open-mpi.org/community/lists/users/2013/02/21356.php and
+# https://www.open-mpi.org/community/lists/users/2013/02/21356.php and
 # a helpful tip from Dave Goodell, set the precious variables for
 # compilers to "no" that we don't want.  Libtool's m4 configry will
 # interpret this as "I won't be using this language; don't bother
@@ -1206,7 +1209,7 @@ fi
 # if we have a C++ compiler.
 AS_IF([test "$OMPI_TRY_FORTRAN_BINDINGS" = "$OMPI_FORTRAN_NO_BINDINGS"],[F77=no FC=no])
 
-LT_INIT([dlopen win32-dll])
+LT_INIT
 
 # What's the suffix of shared libraries?  Inspired by generated
 # Libtool code (even though we don't support several of these
@@ -1242,8 +1245,20 @@ esac
 AC_SUBST(OPAL_DYN_LIB_PREFIX)
 AC_SUBST(OPAL_DYN_LIB_SUFFIX)
 
-# Need the libtool binary before the rpathify stuff
+# Need the libtool executable before the rpathify stuff
 LT_OUTPUT
+
+##################################
+# PRRTE support
+##################################
+
+opal_show_title "Setup PRRTE support"
+
+m4_ifdef([project_prrte],
+         [OMPI_SETUP_PRRTE],
+         [OPAL_SUMMARY_ADD([[Miscellaneous]],[[PRRTE]],[prrte],[no (disabled)])
+          ompi_want_prrte=no])
+AM_CONDITIONAL(OMPI_WANT_PRRTE, test "$ompi_want_prrte" = "yes")
 
 ############################################################################
 # final compiler config
@@ -1266,10 +1281,16 @@ if test "$OMPI_TOP_BUILDDIR" != "$OMPI_TOP_SRCDIR"; then
     # rather than have successive assignments to these shell
     # variables, lest the $(foo) names try to get evaluated here.
     # Yuck!
-    CPPFLAGS='-I$(top_srcdir) -I$(top_builddir) -I$(top_srcdir)/opal/include m4_ifdef([project_ompi], [-I$(top_srcdir)/ompi/include]) m4_ifdef([project_oshmem], [-I$(top_srcdir)/oshmem/include])'" $CPPFLAGS"
+    cpp_includes='$(top_srcdir) $(top_builddir) $(top_srcdir)/opal/include m4_ifdef([project_ompi], [$(top_srcdir)/ompi/include]) m4_ifdef([project_oshmem], [$(top_srcdir)/oshmem/include])'
 else
-    CPPFLAGS='-I$(top_srcdir)'" $CPPFLAGS"
+    cpp_includes='$(top_srcdir)'
 fi
+
+CPP_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$opal_cc_iquote"'&/g')"
+CXX_INCLUDES="$(echo $cpp_includes | $SED 's/[[^ \]]* */'"$opal_cxx_iquote"'&/g')"
+CPPFLAGS="$CPP_INCLUDES $CPPFLAGS"
+# C++ is only relevant if we're building OMPI
+m4_ifdef([project_ompi],[CXXCPPFLAGS="$CXX_INCLUDES $CXXCPPFLAGS"])
 
 # OMPI needs some additional processing of the flags (e.g., get
 # versions without optimization for debugger modules).
@@ -1446,18 +1467,6 @@ m4_ifdef([project_ompi], [OMPI_CONFIG_FILES])
 m4_ifdef([project_oshmem], [OSHMEM_CONFIG_FILES])
 
 OPAL_CHECK_LIBNL_SUMMARY
-
-##################################
-# PRRTE support
-##################################
-
-opal_show_title "Setup PRRTE support"
-
-m4_ifdef([project_prrte],
-         [OMPI_SETUP_PRRTE],
-         [OPAL_SUMMARY_ADD([[Miscellaneous]],[[PRRTE]],[prrte],[no (disabled)])
-          ompi_want_prrte=no])
-AM_CONDITIONAL(OMPI_WANT_PRRTE, test "$ompi_want_prrte" = "yes")
 
 # checkpoint results
 AC_CACHE_SAVE

@@ -12,6 +12,9 @@
 # Copyright (c) 2010 Cisco Systems, Inc.  All rights reserved.
 # Copyright (c) 2013-2018 Los Alamos National Security, LLC. All rights
 #                         reserved.
+# Copyright (c) 2020      Google LLC. All rights reserved.
+
+
 # $COPYRIGHT$
 #
 # Additional copyrights may follow
@@ -33,6 +36,7 @@ dist_opaldata_DATA = help-mca-base.txt help-mca-var.txt
 
 headers = \
         base.h \
+        mca_base_alias.h \
         mca_base_component_repository.h \
         mca_base_var.h \
         mca_base_pvar.h \
@@ -48,6 +52,7 @@ headers = \
 
 libmca_base_la_SOURCES = \
         $(headers) \
+        mca_base_alias.c \
         mca_base_close.c \
         mca_base_cmd_line.c \
         mca_base_component_compare.c \

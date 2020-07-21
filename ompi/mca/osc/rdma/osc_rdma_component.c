@@ -42,7 +42,7 @@
 #include "osc_rdma_dynamic.h"
 #include "osc_rdma_accumulate.h"
 
-#include "opal/threads/mutex.h"
+#include "opal/mca/threads/mutex.h"
 #include "opal/util/arch.h"
 #include "opal/util/argv.h"
 #include "opal/util/printf.h"
@@ -326,7 +326,7 @@ static int ompi_osc_rdma_component_register (void)
                                             MCA_BASE_VAR_SCOPE_GROUP, &mca_osc_rdma_component.locking_mode);
     OBJ_RELEASE(new_enum);
 
-    ompi_osc_rdma_btl_names = "openib,ugni,uct,ucp";
+    ompi_osc_rdma_btl_names = "ugni,uct,tcp";
     opal_asprintf(&description_str, "Comma-delimited list of BTL component names to allow without verifying "
              "connectivity. Do not add a BTL to to this list unless it can reach all "
              "processes in any communicator used with an MPI window (default: %s)",
@@ -338,7 +338,7 @@ static int ompi_osc_rdma_component_register (void)
 
     ompi_osc_rdma_mtl_names = "psm2";
     opal_asprintf(&description_str, "Comma-delimited list of MTL component names to lower the priority of rdma "
-             "osc component favoring pt2pt osc (default: %s)", ompi_osc_rdma_mtl_names);
+             "osc component (default: %s)", ompi_osc_rdma_mtl_names);
     (void) mca_base_component_var_register (&mca_osc_rdma_component.super.osc_version, "mtls", description_str,
                                             MCA_BASE_VAR_TYPE_STRING, NULL, 0, 0, OPAL_INFO_LVL_3,
                                             MCA_BASE_VAR_SCOPE_GROUP, &ompi_osc_rdma_mtl_names);
@@ -457,7 +457,7 @@ static int ompi_osc_rdma_component_query (struct ompi_win_t *win, void **base, s
 #endif /* OPAL_CUDA_SUPPORT */
 
     if (OMPI_SUCCESS == ompi_osc_rdma_query_mtls ()) {
-        return 5; /* this has to be lower that osc pt2pt default priority */
+        return 5;
     }
 
     if (OMPI_SUCCESS != ompi_osc_rdma_query_btls (comm, NULL)) {

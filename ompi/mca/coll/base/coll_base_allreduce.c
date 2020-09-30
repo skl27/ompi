@@ -38,6 +38,7 @@
 #include "ompi/mca/coll/base/coll_base_functions.h"
 #include "coll_base_topo.h"
 #include "coll_base_util.h"
+#include "ompi/runtime/ompi_spc.h"
 
 /*
  * ompi_coll_base_allreduce_intra_nonoverlapping
@@ -58,10 +59,15 @@ ompi_coll_base_allreduce_intra_nonoverlapping(const void *sbuf, void *rbuf, int 
                                                mca_coll_base_module_t *module)
 {
     int err, rank;
+    opal_timer_t local_timer;
 
     rank = ompi_comm_rank(comm);
 
     OPAL_OUTPUT((ompi_coll_base_framework.framework_output,"coll:base:allreduce_intra_nonoverlapping rank %d", rank));
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING_TIME, &local_timer);
 
     /* Reduce to 0 and broadcast. */
 
@@ -81,8 +87,12 @@ ompi_coll_base_allreduce_intra_nonoverlapping(const void *sbuf, void *rbuf, int 
         return err;
     }
 
-    return comm->c_coll->coll_bcast (rbuf, count, dtype, 0, comm,
+    err =  comm->c_coll->coll_bcast (rbuf, count, dtype, 0, comm,
                                     comm->c_coll->coll_bcast_module);
+
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING_TIME, &local_timer);
+
+    return err;
 }
 
 /*
@@ -139,11 +149,18 @@ ompi_coll_base_allreduce_intra_recursivedoubling(const void *sbuf, void *rbuf,
     char *tmpsend = NULL, *tmprecv = NULL, *tmpswap = NULL, *inplacebuf_free = NULL, *inplacebuf;
     ptrdiff_t span, gap = 0;
 
+    opal_timer_t local_timer;
+
+
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
 
     OPAL_OUTPUT((ompi_coll_base_framework.framework_output,
                  "coll:base:allreduce_intra_recursivedoubling rank %d", rank));
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING_TIME, &local_timer);
 
     /* Special case for size == 1 */
     if (1 == size) {
@@ -263,6 +280,7 @@ ompi_coll_base_allreduce_intra_recursivedoubling(const void *sbuf, void *rbuf,
     }
 
     if (NULL != inplacebuf_free) free(inplacebuf_free);
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING_TIME, &local_timer);
     return MPI_SUCCESS;
 
  error_hndl:
@@ -351,6 +369,7 @@ ompi_coll_base_allreduce_intra_ring(const void *sbuf, void *rbuf, int count,
     ptrdiff_t true_lb, true_extent, lb, extent;
     ptrdiff_t block_offset, max_real_segsize;
     ompi_request_t *reqs[2] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL};
+    opal_timer_t local_timer;
 
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
@@ -375,6 +394,10 @@ ompi_coll_base_allreduce_intra_ring(const void *sbuf, void *rbuf, int count,
                                                                   dtype, op,
                                                                   comm, module));
     }
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASE_RING, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASE_RING_TIME, &local_timer);
 
     /* Allocate and initialize temporary buffers */
     ret = ompi_datatype_get_extent(dtype, &lb, &extent);
@@ -523,6 +546,7 @@ ompi_coll_base_allreduce_intra_ring(const void *sbuf, void *rbuf, int count,
     if (NULL != inbuf[0]) free(inbuf[0]);
     if (NULL != inbuf[1]) free(inbuf[1]);
 
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASE_RING_TIME, &local_timer);
     return MPI_SUCCESS;
 
  error_hndl:
@@ -630,6 +654,7 @@ ompi_coll_base_allreduce_intra_ring_segmented(const void *sbuf, void *rbuf, int 
     ptrdiff_t block_offset, max_real_segsize;
     ompi_request_t *reqs[2] = {MPI_REQUEST_NULL, MPI_REQUEST_NULL};
     ptrdiff_t lb, extent, gap;
+    opal_timer_t local_timer;
 
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
@@ -658,6 +683,10 @@ ompi_coll_base_allreduce_intra_ring_segmented(const void *sbuf, void *rbuf, int 
             return (ompi_coll_base_allreduce_intra_ring(sbuf, rbuf, count, dtype, op,
                                                          comm, module));
         }
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED_TIME, &local_timer);
 
     /* Determine the number of phases of the algorithm */
     num_phases = count / (size * segcount);
@@ -843,6 +872,7 @@ ompi_coll_base_allreduce_intra_ring_segmented(const void *sbuf, void *rbuf, int 
     if (NULL != inbuf[0]) free(inbuf[0]);
     if (NULL != inbuf[1]) free(inbuf[1]);
 
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED_TIME, &local_timer);
     return MPI_SUCCESS;
 
  error_hndl:
@@ -885,10 +915,15 @@ ompi_coll_base_allreduce_intra_basic_linear(const void *sbuf, void *rbuf, int co
                                              mca_coll_base_module_t *module)
 {
     int err, rank;
+    opal_timer_t local_timer;
 
     rank = ompi_comm_rank(comm);
 
     OPAL_OUTPUT((ompi_coll_base_framework.framework_output,"coll:base:allreduce_intra_basic_linear rank %d", rank));
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASIC_LINEAR, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASIC_LINEAR_TIME, &local_timer);
 
     /* Reduce to 0 and broadcast. */
 
@@ -908,7 +943,11 @@ ompi_coll_base_allreduce_intra_basic_linear(const void *sbuf, void *rbuf, int co
         return err;
     }
 
-    return ompi_coll_base_bcast_intra_basic_linear(rbuf, count, dtype, 0, comm, module);
+    err = ompi_coll_base_bcast_intra_basic_linear(rbuf, count, dtype, 0, comm, module);
+
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASIC_LINEAR_TIME, &local_timer);
+
+    return err;
 }
 
 /*
@@ -976,6 +1015,8 @@ int ompi_coll_base_allreduce_intra_redscat_allgather(
 
     int comm_size = ompi_comm_size(comm);
     int rank = ompi_comm_rank(comm);
+    opal_timer_t local_timer;
+
     OPAL_OUTPUT((ompi_coll_base_framework.framework_output,
                  "coll:base:allreduce_intra_redscat_allgather: rank %d/%d",
                  rank, comm_size));
@@ -993,6 +1034,10 @@ int ompi_coll_base_allreduce_intra_redscat_allgather(
         return ompi_coll_base_allreduce_intra_basic_linear(sbuf, rbuf, count, dtype,
                                                            op, comm, module);
     }
+
+    local_timer = 0; // Must be 0 for timer to get recorded    
+    SPC_RECORD(OMPI_SPC_ALLREDUCE_BASE_REDSCAT, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_BASE_REDSCAT_TIME, &local_timer);
 
     int err = MPI_SUCCESS;
     ptrdiff_t lb, extent, dsize, gap = 0;
@@ -1227,6 +1272,8 @@ int ompi_coll_base_allreduce_intra_redscat_allgather(
             if (MPI_SUCCESS != err) { goto cleanup_and_return; }
         }
     }
+
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_BASE_REDSCAT_TIME, &local_timer);
 
   cleanup_and_return:
     if (NULL != tmp_buf_raw)

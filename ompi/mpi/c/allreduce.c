@@ -47,8 +47,11 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
                   MPI_Datatype datatype, MPI_Op op, MPI_Comm comm)
 {
     int err;
+    opal_timer_t local_timer = 0;
 
+    local_timer = 0; // Must be 0 for timer to get recorded
     SPC_RECORD(OMPI_SPC_ALLREDUCE, 1);
+    SPC_TIMER_START(OMPI_SPC_ALLREDUCE_TIME, &local_timer);
 
     MEMCHECKER(
         memchecker_datatype(datatype);
@@ -114,6 +117,8 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count,
                                       datatype, op, comm,
                                       comm->c_coll->coll_allreduce_module);
     OBJ_RELEASE(op);
+    
+    SPC_TIMER_STOP(OMPI_SPC_ALLREDUCE_TIME, &local_timer);
     OMPI_ERRHANDLER_RETURN(err, comm, err, FUNC_NAME);
 }
 

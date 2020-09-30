@@ -65,6 +65,7 @@ static ompi_spc_event_t ompi_spc_events_names[OMPI_SPC_NUM_COUNTERS] = {
     SET_COUNTER_ARRAY(OMPI_SPC_REDUCE_SCATTER_INIT, "The number of times MPIX_Reduce_scatter_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_REDUCE_SCATTER_BLOCK_INIT, "The number of times MPIX_Reduce_scatter_block_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE, "The number of times MPI_Allreduce was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_TIME, "The total time spent in MPI_Allreduce."),
     SET_COUNTER_ARRAY(OMPI_SPC_IALLREDUCE, "The number of times MPI_Iallreduce was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_INIT, "The number of times MPIX_Allreduce_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_SCAN, "The number of times MPI_Scan was called."),
@@ -142,7 +143,19 @@ static ompi_spc_event_t ompi_spc_events_names[OMPI_SPC_NUM_COUNTERS] = {
     SET_COUNTER_ARRAY(OMPI_SPC_MAX_UNEXPECTED_IN_QUEUE, "The maximum number of messages that the unexpected message queue(s) within an MPI process "
                                                     "contained at once since the last reset of this counter. Note: This counter is reset each time it is read."),
     SET_COUNTER_ARRAY(OMPI_SPC_MAX_OOS_IN_QUEUE, "The maximum number of messages that the out of sequence message queue(s) within an MPI process "
-                                             "contained at once since the last reset of this counter. Note: This counter is reset each time it is read.")
+                                             "contained at once since the last reset of this counter. Note: This counter is reset each time it is read."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASIC_LINEAR, "The number of times the basic-linear allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASIC_LINEAR_TIME, "The total time spent in the basic-linear allreduce algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING, "The number of times the recursive doubling allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING_TIME, "The total time spent in the recursive doubling allreduce algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RING, "The number of times the ring allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RING_TIME, "The total time spent in the ring allreduce algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED, "The number of times the ring segmented allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED_TIME, "The total time spent in the ring segmented allreduce algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING, "The number of times the nonoverlapping allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING_TIME, "The total time spent in the nonoverlapping allreduce algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_REDSCAT, "The number of times the rescat allreduce algorithm is used."),
+    SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_BASE_REDSCAT_TIME, "The total time spent in the rescat allreduce algorithm.")
 };
 
 /* An array of integer values to denote whether an event is activated (1) or not (0) */
@@ -330,9 +343,17 @@ void ompi_spc_init(void)
 
     /* If this is a timer event, set the corresponding timer_event entry */
     SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_MATCH_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASIC_LINEAR_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASE_RECURSIVE_DOUBLING_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASE_RING_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASE_RING_SEGMENTED_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASE_NONOVERLAPPING_TIME);
+    SET_SPC_BIT(ompi_spc_timer_event, OMPI_SPC_ALLREDUCE_BASE_REDSCAT_TIME);
 
     opal_argv_free(arg_strings);
 }
+
 
 /* Gathers all of the SPC data onto rank 0 of MPI_COMM_WORLD and prints out all
  * of the counter values to stdout.
@@ -391,9 +412,9 @@ static void ompi_spc_dump(void)
             opal_output(0, "\n");
             offset += OMPI_SPC_NUM_COUNTERS;
         }
-        printf("###########################################################################\n");
-        printf("NOTE: Any counters not shown here were either disabled or had a value of 0.\n");
-        printf("###########################################################################\n");
+        opal_output(0,"###########################################################################\n");
+        opal_output(0, "NOTE: Any counters not shown here were either disabled or had a value of 0.\n");
+        opal_output(0, "###########################################################################\n");
 
         free(recv_buffer);
     }

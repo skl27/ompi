@@ -10,8 +10,6 @@
 # Copyright (c) 2004-2005 The Regents of the University of California.
 #                         All rights reserved.
 # Copyright (c) 2010 Cisco Systems, Inc.  All rights reserved.
-# Copyright (c) 2013-2018 Los Alamos National Security, LLC. All rights
-#                         reserved.
 # Copyright (c) 2020      Google LLC. All rights reserved.
 # $COPYRIGHT$
 #
@@ -41,10 +39,7 @@ headers = \
 	mca_base_var_enum.h \
         mca_base_var_group.h \
         mca_base_vari.h \
-	mca_base_framework.h \
-        mca_base_event.h \
-        mca_base_source.h
-
+	mca_base_framework.h
 
 # Library
 
@@ -67,9 +62,7 @@ libmca_base_la_SOURCES = \
         mca_base_var_group.c \
         mca_base_parse_paramfile.c \
 	mca_base_components_register.c \
-	mca_base_framework.c \
-        mca_base_event.c \
-        mca_base_source.c
+	mca_base_framework.c
 
 # Conditionally install the header files
 

@@ -207,9 +207,8 @@ do {                                                                            
    (sendreq)->req_send.req_base.req_ompi.req_status.MPI_ERROR = OMPI_SUCCESS;        \
    (sendreq)->req_send.req_base.req_ompi.req_status._ucount =                        \
         (sendreq)->req_send.req_bytes_packed;                                        \
-   mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_REQUEST_COMPLETE].event, \
-                         MCA_BASE_CB_REQUIRE_ASYNC_SIGNAL_SAFE,                 \
-                         (sendreq)->req_send.req_base.req_comm, NULL, &(sendreq));   \
+   PERUSE_TRACE_COMM_EVENT( PERUSE_COMM_REQ_COMPLETE,                                \
+                            &(sendreq->req_send.req_base), PERUSE_SEND);             \
                                                                                      \
    ompi_request_complete( &((sendreq)->req_send.req_base.req_ompi), (with_signal) ); \
 } while(0)
@@ -257,9 +256,8 @@ send_request_pml_complete(mca_pml_ob1_send_request_t *sendreq)
 {
     if(false == sendreq->req_send.req_base.req_pml_complete) {
         if(sendreq->req_send.req_bytes_packed > 0) {
-            mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_TRANSFER_END].event,
-                                  MCA_BASE_CB_REQUIRE_ASYNC_SIGNAL_SAFE,
-                                  sendreq->req_send.req_base.req_comm, NULL, &sendreq);
+            PERUSE_TRACE_COMM_EVENT( PERUSE_COMM_REQ_XFER_END,
+                                     &(sendreq->req_send.req_base), PERUSE_SEND);
         }
 
         /* return mpool resources */

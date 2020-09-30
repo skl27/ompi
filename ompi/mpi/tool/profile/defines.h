@@ -60,18 +60,4 @@
 #define MPI_T_pvar_start PMPI_T_pvar_start
 #define MPI_T_pvar_stop PMPI_T_pvar_stop
 #define MPI_T_pvar_write PMPI_T_pvar_write
-#define MPI_T_event_get_num PMPI_T_event_get_num
-#define MPI_T_event_get_info PMPI_T_event_get_info
-#define MPI_T_event_get_index PMPI_T_event_get_index
-#define MPI_T_event_register_callback PMPI_T_event_register_callback
-#define MPI_T_event_handle_alloc PMPI_T_event_handle_alloc
-#define MPI_T_event_handle_free PMPI_T_event_handle_free
-#define MPI_T_event_set_dropped_handler PMPI_T_event_set_dropped_handler
-#define MPI_T_event_read PMPI_T_event_read
-#define MPI_T_event_copy PMPI_T_event_copy
-#define MPI_T_event_get_timestamp PMPI_T_event_get_timestamp
-#define MPI_T_event_get_source PMPI_T_event_get_source
-#define MPI_T_source_get_num PMPI_T_source_get_num
-#define MPI_T_source_get_info PMPI_T_source_get_info
-#define MPI_T_source_get_timestamp PMPI_T_source_get_timestamp
 #endif /* OMPIT_C_PROFILE_DEFINES_H */

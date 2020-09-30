@@ -1,4 +1,3 @@
-
 # -*- makefile -*-
 #
 # Copyright (c) 2004-2005 The Trustees of Indiana University and Indiana
@@ -17,8 +16,6 @@
 # Copyright (c) 2013      Los Alamos National Security, LLC. All rights
 # Copyright (c) 2015      Research Organization for Information Science
 #                         and Technology (RIST). All rights reserved.
-#                         reserved.
-# Copyright (c) 2018-2019 Triad National Security, LLC. All rights
 #                         reserved.
 # $COPYRIGHT$
 #
@@ -78,21 +75,7 @@ nodist_libmpi_pmpit_la_SOURCES = \
 	ppvar_session_free.c \
 	ppvar_start.c \
 	ppvar_stop.c \
-	ppvar_write.c \
-	pevent_get_index.c \
-	pevent_get_info.c \
-	pevent_get_num.c \
-	pevent_get_source.c \
-	pevent_get_timestamp.c \
-	pevent_register_callback.c \
-	pevent_handle_alloc.c \
-	pevent_handle_free.c \
-	pevent_read.c \
-	pevent_copy.c \
-	pevent_set_dropped_handler.c \
-	psource_get_num.c \
-	psource_get_info.c \
-	psource_get_timestamp.c
+	ppvar_write.c
 
 #
 # Sym link in the sources from the real MPI directory

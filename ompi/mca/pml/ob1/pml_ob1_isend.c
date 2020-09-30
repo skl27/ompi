@@ -10,7 +10,7 @@
  *                         University of Stuttgart.  All rights reserved.
  * Copyright (c) 2004-2005 The Regents of the University of California.
  *                         All rights reserved.
- * Copyright (c) 2007-2018 Los Alamos National Security, LLC.  All rights
+ * Copyright (c) 2007-2016 Los Alamos National Security, LLC.  All rights
  *                         reserved.
  * Copyright (c) 2014      Cisco Systems, Inc.  All rights reserved.
  * Copyright (c) 2015      Research Organization for Information Science
@@ -60,8 +60,9 @@ int mca_pml_ob1_isend_init(const void *buf,
                                   dst, tag,
                                   comm, sendmode, true);
 
-    mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_REQUEST_ACTIVATE].event,
-                          MCA_BASE_CB_REQUIRE_ASYNC_SIGNAL_SAFE, comm, NULL, &sendreq);
+    PERUSE_TRACE_COMM_EVENT (PERUSE_COMM_REQ_ACTIVATE,
+                             &(sendreq)->req_send.req_base,
+                             PERUSE_SEND);
 
     /* Work around a leak in start by marking this request as complete. The
      * problem occured because we do not have a way to differentiate an
@@ -190,8 +191,9 @@ int mca_pml_ob1_isend(const void *buf,
                                   dst, tag,
                                   comm, sendmode, false);
 
-    mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_REQUEST_ACTIVATE].event,
-                          MCA_BASE_CB_REQUIRE_ASYNC_SIGNAL_SAFE, comm, NULL, &sendreq);
+    PERUSE_TRACE_COMM_EVENT (PERUSE_COMM_REQ_ACTIVATE,
+                             &(sendreq)->req_send.req_base,
+                             PERUSE_SEND);
 
     MCA_PML_OB1_SEND_REQUEST_START_W_SEQ(sendreq, endpoint, seqn, rc);
     *request = (ompi_request_t *) sendreq;
@@ -269,8 +271,9 @@ int mca_pml_ob1_send(const void *buf,
                                   dst, tag,
                                   comm, sendmode, false);
 
-    mca_base_event_raise (mca_pml_ob1_events[MCA_PML_OB1_EVENT_REQUEST_ACTIVATE].event,
-                          MCA_BASE_CB_REQUIRE_ASYNC_SIGNAL_SAFE, comm, NULL, &sendreq);
+    PERUSE_TRACE_COMM_EVENT (PERUSE_COMM_REQ_ACTIVATE,
+                             &sendreq->req_send.req_base,
+                             PERUSE_SEND);
 
     MCA_PML_OB1_SEND_REQUEST_START_W_SEQ(sendreq, endpoint, seqn, rc);
     if (OPAL_LIKELY(rc == OMPI_SUCCESS)) {

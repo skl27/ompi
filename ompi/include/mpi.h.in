@@ -431,6 +431,7 @@ struct ompi_status_public_t {
     int MPI_SOURCE;
     int MPI_TAG;
     int MPI_ERROR;
+    int MPI_MATCHING_ID;
     /* The following two fields are internal to the Open MPI
        implementation and should not be accessed by MPI applications.
        They are subject to change at any time.  These are not the

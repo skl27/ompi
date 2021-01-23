@@ -249,6 +249,7 @@ static inline void recv_req_matched(mca_pml_ob1_recv_request_t *req,
 {
     req->req_recv.req_base.req_ompi.req_status.MPI_SOURCE = hdr->hdr_src;
     req->req_recv.req_base.req_ompi.req_status.MPI_TAG = hdr->hdr_tag;
+    req->req_recv.req_base.req_ompi.req_status.MPI_MATCHING_ID = hdr->hdr_tid;
     req->req_match_received = true;
 
     opal_atomic_wmb();

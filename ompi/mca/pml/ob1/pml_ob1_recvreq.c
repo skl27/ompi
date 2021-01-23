@@ -956,6 +956,7 @@ void mca_pml_ob1_recv_request_matched_probe( mca_pml_ob1_recv_request_t* recvreq
     /* set completion status */
     recvreq->req_recv.req_base.req_ompi.req_status.MPI_TAG = hdr->hdr_match.hdr_tag;
     recvreq->req_recv.req_base.req_ompi.req_status.MPI_SOURCE = hdr->hdr_match.hdr_src;
+    recvreq->req_recv.req_base.req_ompi.req_status.MPI_MATCHING_ID = hdr->hdr_match.hdr_tid;
     recvreq->req_bytes_received = bytes_packed;
     recvreq->req_bytes_expected = bytes_packed;
 

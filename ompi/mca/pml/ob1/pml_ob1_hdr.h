@@ -34,6 +34,7 @@
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
+#include <omp.h>
 
 #include "opal/types.h"
 #include "opal/util/arch.h"
@@ -86,15 +87,10 @@ struct mca_pml_ob1_match_hdr_t {
     int32_t  hdr_src;                      /**< source rank */
     int32_t  hdr_tag;                      /**< user tag */
     uint16_t hdr_seq;                      /**< message sequence number */
-#if OPAL_ENABLE_HETEROGENEOUS_SUPPORT || OPAL_ENABLE_DEBUG
-    uint8_t  hdr_padding[2];               /**< explicitly pad to 16 bytes.  Compilers seem to already prefer to do this, but make it explicit just in case */
-#endif
+    uint16_t hdr_tid;                      /**< thread id */
 };
-#if OPAL_ENABLE_HETEROGENEOUS_SUPPORT || OPAL_ENABLE_DEBUG
+
 #define OMPI_PML_OB1_MATCH_HDR_LEN  16
-#else
-#define OMPI_PML_OB1_MATCH_HDR_LEN  14
-#endif
 
 typedef struct mca_pml_ob1_match_hdr_t mca_pml_ob1_match_hdr_t;
 
@@ -106,10 +102,7 @@ static inline void mca_pml_ob1_match_hdr_prepare (mca_pml_ob1_match_hdr_t *hdr, 
     hdr->hdr_src = hdr_src;
     hdr->hdr_tag = hdr_tag;
     hdr->hdr_seq = hdr_seq;
-#if OPAL_ENABLE_DEBUG
-    hdr->hdr_padding[0] = 0;
-    hdr->hdr_padding[1] = 0;
-#endif
+    hdr->hdr_tid = omp_get_thread_num();
 }
 
 #define MCA_PML_OB1_MATCH_HDR_NTOH(h) \
@@ -119,6 +112,7 @@ do { \
     (h).hdr_src = ntohl((h).hdr_src); \
     (h).hdr_tag = ntohl((h).hdr_tag); \
     (h).hdr_seq = ntohs((h).hdr_seq); \
+    (h).hdr_tid = ntohs((h).hdr_tid); \
 } while (0)
 
 #define MCA_PML_OB1_MATCH_HDR_HTON(h) \
@@ -128,6 +122,7 @@ do { \
     (h).hdr_src = htonl((h).hdr_src); \
     (h).hdr_tag = htonl((h).hdr_tag); \
     (h).hdr_seq = htons((h).hdr_seq); \
+    (h).hdr_tid = htons((h).hdr_tid); \
 } while (0)
 
 /**

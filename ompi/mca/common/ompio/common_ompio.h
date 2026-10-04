@@ -207,6 +207,14 @@ struct ompio_file_t {
     */
     void                  *f_sharedfp_data;
 
+    /* Place for the selected fbtl module to hang its per-file data,
+       for the same reason as f_sharedfp_data above: f_fbtl points to
+       the (usually static) module vtable and offers no room for
+       per-file state. Initialized by the fbtl module's
+       fbtl_module_init, released by its fbtl_module_finalize.
+    */
+    void                  *f_fbtl_data;
+
     /* File View parameters */
     struct ompio_fview_t   f_fview;
     ompi_datatype_t       *f_iov_type;

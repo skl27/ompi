@@ -24,6 +24,7 @@ const char *mca_fbtl_io_uring_component_version_string =
     "OMPI/MPI io_uring FBTL MCA component version " OMPI_VERSION;
 
 int mca_fbtl_io_uring_priority = 10;
+int mca_fbtl_io_uring_queue_depth = 128;
 
 /*
  * Private functions
@@ -67,6 +68,18 @@ static int register_component(void)
                                            OPAL_INFO_LVL_9,
                                            MCA_BASE_VAR_SCOPE_READONLY,
                                            &mca_fbtl_io_uring_priority);
+
+    mca_fbtl_io_uring_queue_depth = 128;
+    (void) mca_base_component_var_register(&mca_fbtl_io_uring_component.fbtlm_version,
+                                           "queue_depth",
+                                           "Maximum number of I/O operations in flight per file "
+                                           "io_uring instance; the submission queue size is rounded "
+                                           "up to the next power of two when the ring is created. "
+                                           "Values smaller than 1 are rejected. Default: 128.",
+                                           MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
+                                           OPAL_INFO_LVL_9,
+                                           MCA_BASE_VAR_SCOPE_READONLY,
+                                           &mca_fbtl_io_uring_queue_depth);
 
     return OMPI_SUCCESS;
 }

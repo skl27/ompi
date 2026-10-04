@@ -88,10 +88,11 @@ int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
 /*
  * Post pending subrequests to the file's ring, starting at
  * data->r_next, until either all of them are posted, the submission
- * queue runs out of slots, or the request has as many operations in
- * flight as the queue_depth MCA parameter allows. Subrequests that
- * could not be posted stay pending and are picked up on the next
- * call.
+ * queue runs out of slots, or the in-flight windows are full: at most
+ * queue_depth operations for this request and, across all requests
+ * sharing the ring, at most queue_depth operations for the file (see
+ * uf_inflight in the header). Subrequests that could not be posted
+ * stay pending and are picked up on the next call.
  *
  * Subrequests are only counted as in flight after io_uring_submit()
  * really accepted the batch, so a submission failure leaves the
@@ -101,9 +102,10 @@ int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
  * overflowing, which is the main source of submission errors, so this
  * path is a once-per-errno report rather than a retry mechanism.
  */
-int mca_fbtl_io_uring_fill_ring(struct io_uring *ring,
+int mca_fbtl_io_uring_fill_ring(struct mca_fbtl_io_uring_file_t *uf,
                                 struct mca_fbtl_io_uring_request_data_t *data)
 {
+    struct io_uring *ring = &uf->ring;
     struct mca_fbtl_io_uring_subreq_t *sub;
     int i, start, end, posted, room, ret;
 
@@ -115,6 +117,9 @@ int mca_fbtl_io_uring_fill_ring(struct io_uring *ring,
 
     start = data->r_next;
     room = mca_fbtl_io_uring_queue_depth - data->r_inflight;
+    if (mca_fbtl_io_uring_queue_depth - uf->uf_inflight < room) {
+        room = mca_fbtl_io_uring_queue_depth - uf->uf_inflight;
+    }
     posted = 0;
 
     for (i = start; i < data->r_req_count && posted < room; i++) {
@@ -182,6 +187,7 @@ int mca_fbtl_io_uring_fill_ring(struct io_uring *ring,
         if (MCA_FBTL_IO_URING_PENDING == sub->s_state) {
             sub->s_state = MCA_FBTL_IO_URING_INFLIGHT;
             data->r_inflight++;
+            uf->uf_inflight++;
             room--;
         }
     }
@@ -236,6 +242,12 @@ void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe)
 
     data = sub->s_data;
     data->r_inflight--;
+    /* the file-wide window frees the same slot; a request abandoned
+       its completions only if the ring already broke down, in which
+       case the file is beyond saving anyway */
+    if (NULL != data->r_fh->f_fbtl_data) {
+        ((struct mca_fbtl_io_uring_file_t *) data->r_fh->f_fbtl_data)->uf_inflight--;
+    }
 
     if (cqe->res < 0) {
         sub->s_result = cqe->res;
@@ -276,7 +288,7 @@ void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe)
  * share the ring are routed to their owners by apply_cqe() on the
  * way.
  */
-void mca_fbtl_io_uring_run_blocking(struct io_uring *ring,
+void mca_fbtl_io_uring_run_blocking(struct mca_fbtl_io_uring_file_t *uf,
                                     struct mca_fbtl_io_uring_request_data_t *data)
 {
     bool waiting = true;
@@ -284,21 +296,25 @@ void mca_fbtl_io_uring_run_blocking(struct io_uring *ring,
     while (waiting &&
            (0 < data->r_inflight || data->r_next < data->r_req_count)) {
 
-        (void) mca_fbtl_io_uring_fill_ring(ring, data);
+        (void) mca_fbtl_io_uring_fill_ring(uf, data);
 
         while (0 < data->r_inflight) {
             struct io_uring_cqe *cqe = NULL;
             int ret;
 
             do {
-                ret = io_uring_wait_cqe(ring, &cqe);
+                ret = io_uring_wait_cqe(&uf->ring, &cqe);
             } while (-EINTR == ret);
 
             if (0 != ret) {
                 /* The ring is unusable or lost completions; there is
                    no way to account for the in-flight operations
                    anymore. Fail the request instead of waiting
-                   forever for completions that may never come. */
+                   forever for completions that may never come. The
+                   file-wide window may keep slots counted that are
+                   really in flight, but a broken ring only ever
+                   concerns a file that is about to be closed
+                   anyway. */
                 if (!data->r_error) {
                     data->r_error = true;
                     data->r_error_no = -ret;
@@ -309,8 +325,69 @@ void mca_fbtl_io_uring_run_blocking(struct io_uring *ring,
             }
 
             mca_fbtl_io_uring_apply_cqe(cqe);
-            io_uring_cqe_seen(ring, cqe);
+            io_uring_cqe_seen(&uf->ring, cqe);
         }
+    }
+}
+
+/*
+ * Harvest every completion that is available on the file's ring right
+ * now, without ever blocking. Completions of other requests sharing
+ * the ring are routed to their owners just like in the blocking loop,
+ * so a single poll advances every outstanding request of this file.
+ */
+void mca_fbtl_io_uring_poll_ring(struct mca_fbtl_io_uring_file_t *uf)
+{
+    struct io_uring_cqe *cqe = NULL;
+    int ret;
+
+    while (0 == (ret = io_uring_peek_cqe(&uf->ring, &cqe))) {
+        mca_fbtl_io_uring_apply_cqe(cqe);
+        io_uring_cqe_seen(&uf->ring, cqe);
+    }
+
+    if (ret != -EAGAIN) {
+        /* io_uring_peek_cqe() only fails like this when the ring is
+           broken; there is nothing to harvest and nothing sensible to
+           attribute the failure to. The next submission or the
+           blocking drain will run into the same problem and report it
+           for the request that hits it. */
+        opal_output(1, "mca_fbtl_io_uring_poll_ring: unexpected completion queue error %d\n",
+                    -ret);
+    }
+}
+
+/*
+ * Block until every operation this request still has on its file's
+ * ring has been harvested: used before the subrequest array that the
+ * completion queue entries point into is freed. Completions of other
+ * requests that turn up on the way are routed to their owners.
+ */
+void mca_fbtl_io_uring_drain_ring(struct mca_fbtl_io_uring_file_t *uf,
+                                  struct mca_fbtl_io_uring_request_data_t *data)
+{
+    while (0 < data->r_inflight) {
+        struct io_uring_cqe *cqe = NULL;
+        int ret;
+
+        do {
+            ret = io_uring_wait_cqe(&uf->ring, &cqe);
+        } while (-EINTR == ret);
+
+        if (0 != ret) {
+            /* same last-resort abandonment as the blocking wait loop
+               above: the ring is broken, waiting further can only
+               hang */
+            if (!data->r_error) {
+                data->r_error = true;
+                data->r_error_no = -ret;
+            }
+            data->r_inflight = 0;
+            break;
+        }
+
+        mca_fbtl_io_uring_apply_cqe(cqe);
+        io_uring_cqe_seen(&uf->ring, cqe);
     }
 }
 

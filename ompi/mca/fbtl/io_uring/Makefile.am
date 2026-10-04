@@ -40,12 +40,14 @@ libmca_fbtl_io_uring_la_LIBADD = $(fbtl_io_uring_LIBS)
 
 # Source files
 
-# The asynchronous byte transfer functions are added in follow-up
-# commits together with the code that uses them.
 fbtl_io_uring_sources = \
         fbtl_io_uring.h \
         fbtl_io_uring.c \
         fbtl_io_uring_io.c \
         fbtl_io_uring_preadv.c \
+        fbtl_io_uring_ipreadv.c \
         fbtl_io_uring_pwritev.c \
+        fbtl_io_uring_ipwritev.c \
+        fbtl_io_uring_progress.c \
+        fbtl_io_uring_request_free.c \
         fbtl_io_uring_component.c

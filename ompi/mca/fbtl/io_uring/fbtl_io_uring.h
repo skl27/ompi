@@ -17,6 +17,7 @@
 #include "ompi/mca/mca.h"
 #include "ompi/mca/fbtl/fbtl.h"
 #include "ompi/mca/common/ompio/common_ompio.h"
+#include "ompi/mca/common/ompio/common_ompio_request.h"
 
 #include <liburing.h>
 
@@ -40,9 +41,18 @@ extern int mca_fbtl_io_uring_queue_depth;
 
 /*
  * Per-file state, hung on ompio_file_t:f_fbtl_data.
+ *
+ * uf_inflight counts the operations of *all* requests currently in
+ * flight on this file's ring. Capping it at queue_depth is what keeps
+ * the completion queue from overflowing when several asynchronous
+ * requests share the ring: each request may have at most
+ * queue_depth operations in flight of its own, but without the file
+ * level counter their sum could outgrow the queue and lose
+ * completions.
  */
 struct mca_fbtl_io_uring_file_t {
     struct io_uring ring;
+    int             uf_inflight;
 };
 
 /* Lifecycle of an individual subrequest (one per f_io_array entry). */
@@ -109,15 +119,49 @@ extern int mca_fbtl_io_uring_module_finalize(ompio_file_t *file);
  * Shared byte transfer engine (fbtl_io_uring_io.c): turns a request's
  * f_io_array into subrequests, posts them to a file's ring, and
  * routes completions back to their owning requests.
+ *
+ *   setup()            turn file->f_io_array into subrequests
+ *   fill_ring()        post pending subrequests, respecting the
+ *                      per-request and per-file in-flight windows
+ *   apply_cqe()        route one completion queue entry to its owner
+ *   run_blocking()     fill/wait loop until the request settles
+ *   poll_ring()        harvest every completion available right now
+ *                      without blocking (asynchronous progress path);
+ *                      completions of *other* requests on the same
+ *                      ring are routed to their owners as well
+ *   drain_ring()       block until this request's own in-flight
+ *                      operations have been harvested, e.g. before
+ *                      the subrequest array they point into goes away
+ *   request_cleanup()  release the subrequest array
  */
 extern int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
                                    ompio_file_t *file, int req_type);
-extern int mca_fbtl_io_uring_fill_ring(struct io_uring *ring,
+extern int mca_fbtl_io_uring_fill_ring(struct mca_fbtl_io_uring_file_t *uf,
                                        struct mca_fbtl_io_uring_request_data_t *data);
 extern void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe);
-extern void mca_fbtl_io_uring_run_blocking(struct io_uring *ring,
+extern void mca_fbtl_io_uring_run_blocking(struct mca_fbtl_io_uring_file_t *uf,
                                            struct mca_fbtl_io_uring_request_data_t *data);
+extern void mca_fbtl_io_uring_poll_ring(struct mca_fbtl_io_uring_file_t *uf);
+extern void mca_fbtl_io_uring_drain_ring(struct mca_fbtl_io_uring_file_t *uf,
+                                         struct mca_fbtl_io_uring_request_data_t *data);
 extern void mca_fbtl_io_uring_request_cleanup(struct mca_fbtl_io_uring_request_data_t *data);
+
+/*
+ * Asynchronous byte transfer functions and their request callbacks
+ * (fbtl_io_uring_ipreadv.c, _ipwritev.c, _progress.c,
+ * _request_free.c). ipreadv()/ipwritev() attach the request's data and
+ * the two callbacks below to the mca_ompio_request_t handed over by
+ * the caller; the ompio progress engine then drives the request via
+ * mca_fbtl_io_uring_progress() until it returns true, and frees the
+ * remaining io_uring specific state via
+ * mca_fbtl_io_uring_request_free().
+ */
+extern ssize_t mca_fbtl_io_uring_ipreadv(ompio_file_t *file,
+                                         ompi_request_t *request);
+extern ssize_t mca_fbtl_io_uring_ipwritev(ompio_file_t *file,
+                                          ompi_request_t *request);
+extern bool mca_fbtl_io_uring_progress(mca_ompio_request_t *req);
+extern void mca_fbtl_io_uring_request_free(mca_ompio_request_t *req);
 
 /* Blocking byte transfer functions (fbtl_io_uring_preadv.c,
  * fbtl_io_uring_pwritev.c): return the number of bytes transferred or

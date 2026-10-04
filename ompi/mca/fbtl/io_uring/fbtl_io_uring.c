@@ -130,19 +130,20 @@ static mca_fbtl_base_module_1_0_0_t io_uring_module = {
     .fbtl_module_finalize  = mca_fbtl_io_uring_module_finalize,
 
     .fbtl_preadv           = mca_fbtl_io_uring_preadv,
+    .fbtl_ipreadv          = mca_fbtl_io_uring_ipreadv,
+
     .fbtl_pwritev          = mca_fbtl_io_uring_pwritev,
+    .fbtl_ipwritev         = mca_fbtl_io_uring_ipwritev,
+
+    .fbtl_progress         = mca_fbtl_io_uring_progress,
+    .fbtl_request_free     = mca_fbtl_io_uring_request_free,
 
     /*
-     * The asynchronous paths and check_atomicity() are filled in by
-     * follow-up commits. Until those exist and file_query() hands out
-     * this module, the NULL entries below are never called; the
-     * blocking functions above are covered by the fact that
-     * file_query() still returns NULL.
+     * check_atomicity() is filled in by a follow-up commit together
+     * with the file query that makes this component selectable; until
+     * the module can be selected at all the NULL entry is never
+     * called.
      */
-    .fbtl_ipreadv          = NULL,
-    .fbtl_ipwritev         = NULL,
-    .fbtl_progress         = NULL,
-    .fbtl_request_free     = NULL,
     .fbtl_check_atomicity  = NULL,
 };
 
@@ -150,10 +151,12 @@ struct mca_fbtl_base_module_1_0_0_t *
 mca_fbtl_io_uring_component_file_query(ompio_file_t *file, int *priority)
 {
     /*
-     * Stub: the io_uring byte transfer functions are not implemented
-     * yet, so this component must never be selected. Once they are,
-     * this becomes the availability probe plus the configured
-     * priority, which keeps the component unselected by default.
+     * Stub: the module is not handed out yet. The byte transfer
+     * functions are complete, but fbtl_check_atomicity() is still
+     * NULL in the module and io_ompio calls it unguarded when the
+     * application sets the atomicity flag; a follow-up commit
+     * implements it and turns this into the availability probe plus
+     * regular-file check that makes the component selectable.
      */
     return NULL;
 }

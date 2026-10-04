@@ -48,7 +48,7 @@ ssize_t mca_fbtl_io_uring_pwritev(ompio_file_t *file)
         return OMPI_ERROR;
     }
 
-    mca_fbtl_io_uring_run_blocking(&uf->ring, &data);
+    mca_fbtl_io_uring_run_blocking(uf, &data);
 
     mca_fbtl_io_uring_request_cleanup(&data);
 

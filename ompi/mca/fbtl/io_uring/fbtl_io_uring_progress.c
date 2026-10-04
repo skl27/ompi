@@ -73,11 +73,18 @@ bool mca_fbtl_io_uring_progress(mca_ompio_request_t *req)
     }
 
     /* Nothing left to post, nothing in flight: the request has
-       settled. A recorded error (submission or operation failure)
+       settled. Release the locks as early as posix does at this
+       point, before the caller finally frees the request; the per
+       subrequest region locks have already been dropped by
+       apply_cqe() with their completions, what remains is the
+       atomicity lock (and anything an error path left behind).
+       A recorded error (submission or operation failure)
        turns it into a failed MPI request; otherwise the byte count
        collected from the completions is the result, and a short one
        is the end-of-file indication, exactly like the return value of
        the blocking path. */
+    mca_fbtl_io_uring_release_locks(data);
+
     req->req_ompi.req_status.MPI_ERROR = (data->r_error) ? OMPI_ERROR : OMPI_SUCCESS;
     req->req_ompi.req_status._ucount = data->r_total_len;
 

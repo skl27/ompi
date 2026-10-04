@@ -53,6 +53,7 @@ int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
     data->r_total_len = 0;
     data->r_error = false;
     data->r_error_no = 0;
+    data->r_alock_counter = 0;
 
     if (0 == data->r_req_count) {
         data->r_subs = NULL;
@@ -130,6 +131,34 @@ int mca_fbtl_io_uring_fill_ring(struct mca_fbtl_io_uring_file_t *uf,
             continue;
         }
 
+        /* Lock the exact byte range of the subrequest for as long
+           as it is in flight. The posix component does this with
+           OMPIO_LOCK_ENTIRE_REGION for its single and datasieving
+           paths; applying it to every subrequest matches those two
+           and strictly covers more than the span-edge locking of
+           the generic path, while never locking the holes between
+           strided entries. The lock is taken once per subrequest,
+           not once per posting: a resubmitted short completion
+           keeps the (superset) lock it already holds. With an
+           enforced atomicity the whole region is locked anyway, and
+           unlocking a completed subrequest would punch a hole into
+           that still-held atomicity lock, so the per-subrequest
+           locks are skipped entirely. */
+        if (0 == sub->s_lock_counter && !data->r_fh->f_atomicity) {
+            ret = mca_fbtl_io_uring_lock(&sub->s_lock, data->r_fh,
+                                         (MCA_FBTL_IO_URING_WRITE == data->r_req_type) ?
+                                         F_WRLCK : F_RDLCK,
+                                         sub->s_offset, (off_t) sub->s_length,
+                                         OMPIO_LOCK_ENTIRE_REGION, &sub->s_lock_counter);
+            if (0 != ret) {
+                if (!data->r_error) {
+                    data->r_error = true;
+                    data->r_error_no = errno;
+                }
+                break;
+            }
+        }
+
         sqe = io_uring_get_sqe(ring);
         if (NULL == sqe) {
             /* submission queue full: since every fill ends with a
@@ -154,7 +183,8 @@ int mca_fbtl_io_uring_fill_ring(struct mca_fbtl_io_uring_file_t *uf,
     end = i;
 
     if (0 == posted) {
-        data->r_next = end;
+        /* a failed lock stops issuing just like a failed submit does */
+        data->r_next = (data->r_error) ? data->r_req_count : end;
         return OMPI_SUCCESS;
     }
 
@@ -252,6 +282,9 @@ void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe)
     if (cqe->res < 0) {
         sub->s_result = cqe->res;
         sub->s_state = MCA_FBTL_IO_URING_DONE;
+        if (0 != sub->s_lock_counter) {
+            mca_fbtl_io_uring_unlock(&sub->s_lock, data->r_fh, &sub->s_lock_counter);
+        }
         if (!data->r_error) {
             data->r_error = true;
             data->r_error_no = -cqe->res;
@@ -266,10 +299,14 @@ void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe)
 
     if (0 == res || res >= (unsigned) sub->s_length) {
         sub->s_state = MCA_FBTL_IO_URING_DONE;
+        if (0 != sub->s_lock_counter) {
+            mca_fbtl_io_uring_unlock(&sub->s_lock, data->r_fh, &sub->s_lock_counter);
+        }
     } else {
         /* short completion: count what made it, and queue the
-           remainder as a fresh pending subrequest; rewinding r_next
-           lets fill_ring pick it up again */
+           remainder as a fresh pending subrequest, keeping its
+           region lock; rewinding r_next lets fill_ring pick it
+           up again */
         sub->s_offset += res;
         sub->s_memory = (char *) sub->s_memory + res;
         sub->s_length -= res;
@@ -391,10 +428,14 @@ void mca_fbtl_io_uring_drain_ring(struct mca_fbtl_io_uring_file_t *uf,
     }
 }
 
-/* Release the subrequest array; the caller owns the data struct
-   itself, which is stack allocated for blocking requests. */
+/* Release whatever locks the request might still hold (regions of
+   operations that never completed, e.g. after an error aborted the
+   request, and the atomicity lock) and free the subrequest array;
+   the caller owns the data struct itself, which is stack allocated
+   for blocking requests. */
 void mca_fbtl_io_uring_request_cleanup(struct mca_fbtl_io_uring_request_data_t *data)
 {
+    mca_fbtl_io_uring_release_locks(data);
     free(data->r_subs);
     data->r_subs = NULL;
 }

@@ -44,6 +44,7 @@ fbtl_io_uring_sources = \
         fbtl_io_uring.h \
         fbtl_io_uring.c \
         fbtl_io_uring_io.c \
+        fbtl_io_uring_lock.c \
         fbtl_io_uring_preadv.c \
         fbtl_io_uring_ipreadv.c \
         fbtl_io_uring_pwritev.c \

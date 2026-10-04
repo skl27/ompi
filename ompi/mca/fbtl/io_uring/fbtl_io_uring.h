@@ -19,6 +19,8 @@
 #include "ompi/mca/common/ompio/common_ompio.h"
 #include "ompi/mca/common/ompio/common_ompio_request.h"
 
+#include <fcntl.h>
+
 #include <liburing.h>
 
 /*
@@ -70,6 +72,13 @@ struct mca_fbtl_io_uring_file_t {
  * it belongs to, so completions of several requests may safely be
  * interleaved on one ring: whoever reaps a completion routes it to
  * its owner through this pointer.
+ *
+ * s_lock guards the subrequest's entire byte range (matching the
+ * OMPIO_LOCK_ENTIRE_REGION locking of the posix component's single
+ * and datasieving paths, for every subrequest); it is taken when
+ * the subrequest is first posted and released when it completes,
+ * covering resubmissions of short completions, which keep the
+ * original (superset) lock.
  */
 struct mca_fbtl_io_uring_subreq_t {
     int                                      s_fd;
@@ -78,13 +87,19 @@ struct mca_fbtl_io_uring_subreq_t {
     OMPI_MPI_OFFSET_TYPE                     s_offset;
     int                                      s_state;
     ssize_t                                  s_result;
+    struct flock                             s_lock;
+    int                                      s_lock_counter;
     struct mca_fbtl_io_uring_request_data_t *s_data;
 };
 
 /*
  * Per-request state: stack allocated by the blocking read/write
  * functions, heap allocated (and owned) by an mca_ompio_request_t for
- * the asynchronous ones.
+ * the asynchronous ones. r_alock is the lock of an enforced MPI
+ * atomicity, spanning the whole region covered by the request's
+ * I/O vector; while it is held the per-subrequest locks are redundant
+ * and not taken (an unlocked subrequest would otherwise punch holes
+ * into the atomicity region when releasing its own lock).
  */
 struct mca_fbtl_io_uring_request_data_t {
     ompio_file_t                       *r_fh;
@@ -95,6 +110,8 @@ struct mca_fbtl_io_uring_request_data_t {
     ssize_t                             r_total_len; /* bytes completed so far */
     bool                                r_error;
     int                                 r_error_no;
+    struct flock                        r_alock;
+    int                                 r_alock_counter;
     struct mca_fbtl_io_uring_subreq_t  *r_subs;
 };
 
@@ -132,7 +149,8 @@ extern int mca_fbtl_io_uring_module_finalize(ompio_file_t *file);
  *   drain_ring()       block until this request's own in-flight
  *                      operations have been harvested, e.g. before
  *                      the subrequest array they point into goes away
- *   request_cleanup()  release the subrequest array
+ *   request_cleanup()  release whatever locks the request still
+ *                      holds and free the subrequest array
  */
 extern int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
                                    ompio_file_t *file, int req_type);
@@ -145,6 +163,24 @@ extern void mca_fbtl_io_uring_poll_ring(struct mca_fbtl_io_uring_file_t *uf);
 extern void mca_fbtl_io_uring_drain_ring(struct mca_fbtl_io_uring_file_t *uf,
                                          struct mca_fbtl_io_uring_request_data_t *data);
 extern void mca_fbtl_io_uring_request_cleanup(struct mca_fbtl_io_uring_request_data_t *data);
+
+/*
+ * POSIX record locking helpers (fbtl_io_uring_lock.c), adapted from
+ * the posix component's locking so both components offer the same
+ * semantics: mca_fbtl_io_uring_lock()/unlock() take/release one
+ * advisory region lock with the posix counter convention,
+ * set_atomicity_lock() takes the whole-region lock of an enforced MPI
+ * atomicity, and release_locks() gives back every lock a request
+ * might still hold.
+ */
+extern int mca_fbtl_io_uring_lock(struct flock *lock, ompio_file_t *fh, int op,
+                                  OMPI_MPI_OFFSET_TYPE offset, off_t len, int flags,
+                                  int *lock_counter);
+extern void mca_fbtl_io_uring_unlock(struct flock *lock, ompio_file_t *fh,
+                                     int *lock_counter);
+extern int mca_fbtl_io_uring_set_atomicity_lock(struct mca_fbtl_io_uring_request_data_t *data,
+                                                int op);
+extern void mca_fbtl_io_uring_release_locks(struct mca_fbtl_io_uring_request_data_t *data);
 
 /*
  * Asynchronous byte transfer functions and their request callbacks

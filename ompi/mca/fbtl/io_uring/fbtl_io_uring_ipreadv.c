@@ -11,6 +11,9 @@
 #include "ompi_config.h"
 
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+
 #include <liburing.h>
 
 #include "opal/util/output.h"
@@ -58,6 +61,18 @@ ssize_t mca_fbtl_io_uring_ipreadv(ompio_file_t *file, ompi_request_t *request)
     }
 
     if (OMPI_SUCCESS != mca_fbtl_io_uring_setup(data, file, MCA_FBTL_IO_URING_READ)) {
+        free(data);
+        return OMPI_ERROR;
+    }
+
+    /* Take the atomicity lock before anything is submitted so that no
+       unlocked window ever touches the file; it is released when the
+       request settles in the progress function, or here
+       synchronously if the submission fails outright. */
+    if (0 != mca_fbtl_io_uring_set_atomicity_lock(data, F_RDLCK)) {
+        opal_output(1, "mca_fbtl_io_uring_ipreadv: error in atomicity lock: %s",
+                    strerror(errno));
+        mca_fbtl_io_uring_request_cleanup(data);
         free(data);
         return OMPI_ERROR;
     }

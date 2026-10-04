@@ -10,7 +10,10 @@
 
 #include "ompi_config.h"
 
+#include <string.h>
 #include <liburing.h>
+
+#include "opal/util/output.h"
 
 #include "fbtl_io_uring.h"
 
@@ -52,23 +55,68 @@ int mca_fbtl_io_uring_component_init_query(bool enable_progress_threads,
        infrequent, instead of on the first MPI_File_open(). */
     (void) mca_fbtl_io_uring_ring_supported();
 
+    /* io_uring_queue_init() needs a usable submission queue size;
+       fall back to the default instead of failing every open. */
+    if (1 > mca_fbtl_io_uring_queue_depth) {
+        opal_output(0, "fbtl:io_uring: ignoring invalid queue_depth %d, using the default of 128\n",
+                    mca_fbtl_io_uring_queue_depth);
+        mca_fbtl_io_uring_queue_depth = 128;
+    }
+
     return OMPI_SUCCESS;
 }
 
 /*
- * There is nothing for the module to initialize or release per file
- * yet: the byte transfer functions below are stubs, and once they are
- * implemented their io_uring ring will live in
- * struct mca_fbtl_io_uring_file_t on file->f_fbtl_data, created here
- * and torn down in finalize.
+ * Create the io_uring instance that serves this file for as long as
+ * it is open; the byte transfer functions find it through
+ * file->f_fbtl_data. A failure here fails the MPI_File_open() call:
+ * fbtl_base_file_select() propagates the module_init() return code,
+ * so a system whose resources ran out since the availability probe
+ * degrades to an open error, not to broken I/O later.
  */
 int mca_fbtl_io_uring_module_init(ompio_file_t *file)
 {
+    struct mca_fbtl_io_uring_file_t *uf;
+    int ret;
+
+    uf = (struct mca_fbtl_io_uring_file_t *)
+        calloc(1, sizeof(struct mca_fbtl_io_uring_file_t));
+    if (NULL == uf) {
+        return OMPI_ERR_OUT_OF_RESOURCE;
+    }
+
+    /* liburing rounds the submission queue size up to the next power
+       of two and sizes the completion queue accordingly; the
+       queue_depth MCA parameter was sanitized in init_query(). */
+    ret = io_uring_queue_init(mca_fbtl_io_uring_queue_depth, &uf->ring, 0);
+    if (0 != ret) {
+        opal_output(0, "fbtl:io_uring: could not create io_uring instance for file %s: %s\n",
+                    file->f_filename, strerror(-ret));
+        free(uf);
+        return OMPI_ERR_OUT_OF_RESOURCE;
+    }
+
+    file->f_fbtl_data = (void *) uf;
+
     return OMPI_SUCCESS;
 }
 
 int mca_fbtl_io_uring_module_finalize(ompio_file_t *file)
 {
+    struct mca_fbtl_io_uring_file_t *uf =
+        (struct mca_fbtl_io_uring_file_t *) file->f_fbtl_data;
+
+    if (NULL != uf) {
+        /* No outstanding requests can exist here: the MPI standard
+           requires all non-blocking I/O on a file handle to have
+           completed before MPI_File_close(), which is where fbtl
+           modules are finalized. io_uring_queue_exit() releases the
+           ring, waiting for nothing except unsubmitted entries. */
+        io_uring_queue_exit(&uf->ring);
+        free(uf);
+        file->f_fbtl_data = NULL;
+    }
+
     return OMPI_SUCCESS;
 }
 
@@ -81,14 +129,17 @@ static mca_fbtl_base_module_1_0_0_t io_uring_module = {
     .fbtl_module_init      = mca_fbtl_io_uring_module_init,
     .fbtl_module_finalize  = mca_fbtl_io_uring_module_finalize,
 
+    .fbtl_preadv           = mca_fbtl_io_uring_preadv,
+    .fbtl_pwritev          = mca_fbtl_io_uring_pwritev,
+
     /*
-     * The byte transfer functions are filled in by follow-up
-     * commits. Until then file_query() never hands out this module,
-     * so the NULL entries are never called.
+     * The asynchronous paths and check_atomicity() are filled in by
+     * follow-up commits. Until those exist and file_query() hands out
+     * this module, the NULL entries below are never called; the
+     * blocking functions above are covered by the fact that
+     * file_query() still returns NULL.
      */
-    .fbtl_preadv           = NULL,
     .fbtl_ipreadv          = NULL,
-    .fbtl_pwritev          = NULL,
     .fbtl_ipwritev         = NULL,
     .fbtl_progress         = NULL,
     .fbtl_request_free     = NULL,

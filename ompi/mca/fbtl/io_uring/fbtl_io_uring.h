@@ -105,4 +105,24 @@ extern bool mca_fbtl_io_uring_ring_supported(void);
 extern int mca_fbtl_io_uring_module_init(ompio_file_t *file);
 extern int mca_fbtl_io_uring_module_finalize(ompio_file_t *file);
 
+/*
+ * Shared byte transfer engine (fbtl_io_uring_io.c): turns a request's
+ * f_io_array into subrequests, posts them to a file's ring, and
+ * routes completions back to their owning requests.
+ */
+extern int mca_fbtl_io_uring_setup(struct mca_fbtl_io_uring_request_data_t *data,
+                                   ompio_file_t *file, int req_type);
+extern int mca_fbtl_io_uring_fill_ring(struct io_uring *ring,
+                                       struct mca_fbtl_io_uring_request_data_t *data);
+extern void mca_fbtl_io_uring_apply_cqe(struct io_uring_cqe *cqe);
+extern void mca_fbtl_io_uring_run_blocking(struct io_uring *ring,
+                                           struct mca_fbtl_io_uring_request_data_t *data);
+extern void mca_fbtl_io_uring_request_cleanup(struct mca_fbtl_io_uring_request_data_t *data);
+
+/* Blocking byte transfer functions (fbtl_io_uring_preadv.c,
+ * fbtl_io_uring_pwritev.c): return the number of bytes transferred or
+ * OMPI_ERROR. */
+extern ssize_t mca_fbtl_io_uring_preadv(ompio_file_t *file);
+extern ssize_t mca_fbtl_io_uring_pwritev(ompio_file_t *file);
+
 #endif /* MCA_FBTL_IO_URING_H */

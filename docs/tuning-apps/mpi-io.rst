@@ -84,6 +84,16 @@ component is used if no file system specific component is available
 ``fbtl`` component is used as the default component for read/write
 operations.
 
+On Linux kernels with io_uring support, the ``io_uring`` ``fbtl``
+component can serve those same individual read/write operations for
+files on plain Unix file systems by submitting them to a per-file
+io_uring instance instead of using ``pread()``/``pwrite()`` and
+POSIX AIO. It is not preferred by default: raise its priority above
+the ``posix`` component's value of 50 (``fbtl_io_uring_priority``) or
+restrict the framework to it (``mpirun --mca fbtl io_uring ...``) to
+select it. The ``fbtl_io_uring_queue_depth`` parameter bounds the
+number of operations kept in flight per open file.
+
 The ``fcoll`` framework provides several different components. The
 current decision logic in OMPIO uses the file view provided by the
 application as well as file system level characteristics (e.g. file

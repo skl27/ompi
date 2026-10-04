@@ -243,3 +243,31 @@ void mca_fbtl_io_uring_release_locks(struct mca_fbtl_io_uring_request_data_t *da
         mca_fbtl_io_uring_unlock(&data->r_alock, data->r_fh, &data->r_alock_counter);
     }
 }
+
+/*
+ * Report whether an enforced MPI atomicity (MPI_File_set_atomicity())
+ * can be implemented on this file by locking it. Adapted verbatim in
+ * behaviour from the posix component: probe the file with F_GETLK for a
+ * write lock over the whole file and treat any successful reply as
+ * "locking works here" - the kernel only reports on whether the
+ * filesystem supports POSIX record locks at all, not on whether some
+ * other process happens to hold one. A failing probe (e.g. ENOLCK or
+ * EPERM on a filesystem that disallows locking) makes the caller in
+ * io_ompio refuse the atomicity flag.
+ */
+bool mca_fbtl_io_uring_check_atomicity(ompio_file_t *file)
+{
+    struct flock lock;
+
+    lock.l_type   = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    lock.l_start  = 0;
+    lock.l_len    = 0;
+    lock.l_pid    = 0;
+
+    if (fcntl(file->fd, F_GETLK, &lock) < 0) {
+        return false;
+    }
+
+    return true;
+}

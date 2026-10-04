@@ -170,8 +170,9 @@ extern void mca_fbtl_io_uring_request_cleanup(struct mca_fbtl_io_uring_request_d
  * semantics: mca_fbtl_io_uring_lock()/unlock() take/release one
  * advisory region lock with the posix counter convention,
  * set_atomicity_lock() takes the whole-region lock of an enforced MPI
- * atomicity, and release_locks() gives back every lock a request
- * might still hold.
+ * atomicity, release_locks() gives back every lock a request might
+ * still hold, and check_atomicity() answers whether the file can be
+ * locked at all (fbtl_check_atomicity module entry point).
  */
 extern int mca_fbtl_io_uring_lock(struct flock *lock, ompio_file_t *fh, int op,
                                   OMPI_MPI_OFFSET_TYPE offset, off_t len, int flags,
@@ -181,6 +182,7 @@ extern void mca_fbtl_io_uring_unlock(struct flock *lock, ompio_file_t *fh,
 extern int mca_fbtl_io_uring_set_atomicity_lock(struct mca_fbtl_io_uring_request_data_t *data,
                                                 int op);
 extern void mca_fbtl_io_uring_release_locks(struct mca_fbtl_io_uring_request_data_t *data);
+extern bool mca_fbtl_io_uring_check_atomicity(ompio_file_t *file);
 
 /*
  * Asynchronous byte transfer functions and their request callbacks

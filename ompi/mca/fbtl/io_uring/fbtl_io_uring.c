@@ -138,32 +138,48 @@ static mca_fbtl_base_module_1_0_0_t io_uring_module = {
     .fbtl_progress         = mca_fbtl_io_uring_progress,
     .fbtl_request_free     = mca_fbtl_io_uring_request_free,
 
-    /*
-     * check_atomicity() is filled in by a follow-up commit together
-     * with the file query that makes this component selectable; until
-     * the module can be selected at all the NULL entry is never
-     * called.
-     */
-    .fbtl_check_atomicity  = NULL,
+    .fbtl_check_atomicity  = mca_fbtl_io_uring_check_atomicity,
 };
 
 struct mca_fbtl_base_module_1_0_0_t *
 mca_fbtl_io_uring_component_file_query(ompio_file_t *file, int *priority)
 {
+    if (!mca_fbtl_io_uring_ring_supported()) {
+        return NULL;
+    }
+
     /*
-     * Stub: the module is not handed out yet. The byte transfer
-     * functions are complete, but fbtl_check_atomicity() is still
-     * NULL in the module and io_ompio calls it unguarded when the
-     * application sets the atomicity flag; a follow-up commit
-     * implements it and turns this into the availability probe plus
-     * regular-file check that makes the component selectable.
+     * Offer io_uring byte transfers only for files that the fs layer
+     * classified as living on a plain Unix filesystem, mirroring the
+     * check the posix component uses to bump its own priority; file
+     * systems with specialized fbtl components (Lustre) keep being
+     * served by them. file->f_fstype has been set by the fs
+     * component's file_query already: fbtl selection runs strictly
+     * after fs selection, and neither has opened the file yet, which
+     * is why the decision cannot use file->fd.
+     *
+     * The default priority is deliberately lower than the 50 the
+     * posix component claims on such files: an io_uring ring per
+     * open file costs resources and the performance win depends on
+     * the storage, so the component is opt-in for now by raising
+     * fbtl_io_uring_priority above the posix value (or forcing it
+     * with --mca fbtl io_uring).
      */
-    return NULL;
+    if (UFS != file->f_fstype) {
+        return NULL;
+    }
+
+    *priority = mca_fbtl_io_uring_priority;
+
+    return &io_uring_module;
 }
 
 int mca_fbtl_io_uring_component_file_unquery(ompio_file_t *file)
 {
-    /* file_query() never hands out this module, so there is nothing
-       to undo */
+    /* the module is a static singleton and file_query() stores
+       nothing in the file, so there is nothing to undo; per-file
+       state is created in module_init() and released again in
+       module_finalize() */
+    (void) file;
     return OMPI_SUCCESS;
 }

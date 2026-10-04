@@ -8,6 +8,19 @@ Open MPI version v6.1.0
 --------------------------
 :Date: ...fill me in...
 
+- Added a new ``fbtl/io_uring`` component for the ``ompio`` MPI I/O
+  data sieving layer.  It performs positional read and write vectors
+  with Linux ``io_uring`` -- one ring per open file, with batched
+  submission and completion-queue driven progress -- as an alternative
+  to the ``fbtl/posix`` component's ``pread()``/``pwrite()`` and POSIX
+  AIO path.  The component is only available on Linux kernels with
+  ``io_uring`` enabled, and it is deliberately ranked below
+  ``fbtl/posix`` by default: select it by raising its priority above
+  the posix component's priority, e.g., ``--mca fbtl_io_uring_priority
+  51``, or restrict the framework to it with ``--mca fbtl io_uring``.
+  Its main tunable is ``fbtl_io_uring_queue_depth``, the maximum
+  number of operations in flight per file.
+
 - Fixed ``btl/tcp`` failing to connect, or hanging, on nodes that have an
   interface whose IP address is not unique across the job -- a container
   bridge such as ``docker0``, which is commonly ``172.17.0.1`` on every

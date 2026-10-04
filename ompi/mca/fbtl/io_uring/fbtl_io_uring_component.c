@@ -63,7 +63,11 @@ static int register_component(void)
 {
     mca_fbtl_io_uring_priority = 10;
     (void) mca_base_component_var_register(&mca_fbtl_io_uring_component.fbtlm_version,
-                                           "priority", "Priority of the fbtl io_uring component",
+                                           "priority",
+                                           "Priority of the fbtl io_uring component; the posix "
+                                           "component reports 50 for files on plain Unix file "
+                                           "systems, so this component is only preferred if its "
+                                           "priority is raised above that value",
                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            OPAL_INFO_LVL_9,
                                            MCA_BASE_VAR_SCOPE_READONLY,
@@ -73,9 +77,9 @@ static int register_component(void)
     (void) mca_base_component_var_register(&mca_fbtl_io_uring_component.fbtlm_version,
                                            "queue_depth",
                                            "Maximum number of I/O operations in flight per file "
-                                           "io_uring instance; the submission queue size is rounded "
-                                           "up to the next power of two when the ring is created. "
-                                           "Values smaller than 1 are rejected. Default: 128.",
+                                           "io_uring instance; the submission queue size is the "
+                                           "next power of two when the ring is created. Values "
+                                           "smaller than 1 are ignored in favour of the default.",
                                            MCA_BASE_VAR_TYPE_INT, NULL, 0, 0,
                                            OPAL_INFO_LVL_9,
                                            MCA_BASE_VAR_SCOPE_READONLY,
